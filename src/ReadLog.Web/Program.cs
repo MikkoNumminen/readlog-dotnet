@@ -76,6 +76,9 @@ builder.Services.AddHttpClient<IGoogleBooksClient, GoogleBooksClient>(client =>
 builder.Services.AddScoped<IBookSearchService, BookSearchService>();
 builder.Services.AddScoped<IBookDetailsService, BookDetailsService>();
 
+// The reading-log domain service (logging, library, stats, public feed).
+builder.Services.AddScoped<IReadLogService, ReadLogService>();
+
 var app = builder.Build();
 
 // Apply pending EF Core migrations at startup so a clean database just works.

@@ -1,0 +1,198 @@
+using Microsoft.EntityFrameworkCore;
+using ReadLog.Web.Data;
+using ReadLog.Web.Dtos;
+using ReadLog.Web.Models;
+
+namespace ReadLog.Web.Services;
+
+/// <summary>
+/// The reading-log domain: logging finished books, the user's library, the
+/// "have I read this?" lookup, edit/delete, account stats, and the public feed.
+/// Methods take the acting <c>userId</c> explicitly — pages enforce authentication
+/// and pass it in, keeping the service free of HTTP concerns.
+/// </summary>
+public interface IReadLogService
+{
+    Task LogBookAsync(string userId, LogBookRequest request, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<LibraryEntryDto>> GetMyBooksAsync(string userId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<LibraryEntryDto>> CheckIfReadAsync(string userId, string query, CancellationToken cancellationToken = default);
+
+    /// <returns><c>false</c> if the entry doesn't exist or isn't owned by the user (treat as 404).</returns>
+    Task<bool> UpdateReadEntryAsync(string userId, int entryId, UpdateReadEntryRequest request, CancellationToken cancellationToken = default);
+
+    /// <returns><c>false</c> if the entry doesn't exist or isn't owned by the user (treat as 404).</returns>
+    Task<bool> DeleteReadEntryAsync(string userId, int entryId, CancellationToken cancellationToken = default);
+
+    Task<AccountStats> GetAccountStatsAsync(string userId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<PublicReadDto>> GetRecentPublicReadsAsync(CancellationToken cancellationToken = default);
+}
+
+public class ReadLogService : IReadLogService
+{
+    private const int PublicFeedSize = 20;
+
+    private readonly ApplicationDbContext _db;
+    private readonly ILogger<ReadLogService> _logger;
+
+    public ReadLogService(ApplicationDbContext db, ILogger<ReadLogService> logger)
+    {
+        _db = db;
+        _logger = logger;
+    }
+
+    public async Task LogBookAsync(string userId, LogBookRequest request, CancellationToken cancellationToken = default)
+    {
+        var book = await GetOrCreateBookAsync(request, cancellationToken);
+
+        _db.ReadEntries.Add(new ReadEntry
+        {
+            UserId = userId,
+            Book = book,
+            Format = request.Format,
+            FinishedAt = request.FinishedAt,
+            Rating = request.Rating,
+        });
+
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<LibraryEntryDto>> GetMyBooksAsync(
+        string userId, CancellationToken cancellationToken = default) =>
+        await _db.ReadEntries
+            .Where(e => e.UserId == userId)
+            .OrderByDescending(e => e.FinishedAt)
+            .ThenByDescending(e => e.CreatedAt)
+            .Select(e => new LibraryEntryDto(
+                e.Id, e.Format, e.FinishedAt, e.Rating,
+                new BookSummaryDto(e.Book.Title, e.Book.Author, e.Book.CoverUrl)))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<LibraryEntryDto>> CheckIfReadAsync(
+        string userId, string query, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return [];
+        }
+
+        // Case-insensitive "contains": SQLite LIKE is ASCII case-insensitive by default.
+        // Escape the user's % / _ / \ so they're matched literally, not as wildcards.
+        var pattern = $"%{EscapeLike(query.Trim())}%";
+
+        return await _db.ReadEntries
+            .Where(e => e.UserId == userId && EF.Functions.Like(e.Book.Title, pattern, "\\"))
+            .OrderByDescending(e => e.FinishedAt)
+            .Select(e => new LibraryEntryDto(
+                e.Id, e.Format, e.FinishedAt, e.Rating,
+                new BookSummaryDto(e.Book.Title, e.Book.Author, e.Book.CoverUrl)))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> UpdateReadEntryAsync(
+        string userId, int entryId, UpdateReadEntryRequest request, CancellationToken cancellationToken = default)
+    {
+        // Combine existence + ownership into one query: a non-owner sees the same
+        // "not found" as a stranger (the original returns 404, not 403).
+        var entry = await _db.ReadEntries
+            .Include(e => e.Book)
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.UserId == userId, cancellationToken);
+        if (entry is null)
+        {
+            return false;
+        }
+
+        // NOTE: Title edits the shared catalogue Book, so they change every user's entry
+        // for that book — faithful to the original. A per-entry title override would
+        // localise it; deliberately out of scope for the port.
+        entry.Book.Title = request.Title;
+        entry.Format = request.Format;
+        entry.FinishedAt = request.FinishedAt;
+        entry.Rating = request.Rating; // null clears, 0 is a real rating
+
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> DeleteReadEntryAsync(
+        string userId, int entryId, CancellationToken cancellationToken = default)
+    {
+        var entry = await _db.ReadEntries
+            .FirstOrDefaultAsync(e => e.Id == entryId && e.UserId == userId, cancellationToken);
+        if (entry is null)
+        {
+            return false;
+        }
+
+        _db.ReadEntries.Remove(entry); // the shared Book row is left intact
+        await _db.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<AccountStats> GetAccountStatsAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        var totalBooks = await _db.ReadEntries.CountAsync(e => e.UserId == userId, cancellationToken);
+
+        var formats = await _db.ReadEntries
+            .Where(e => e.UserId == userId)
+            .GroupBy(e => e.Format)
+            .Select(g => new { Format = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.Format, g => g.Count, cancellationToken);
+
+        return new AccountStats(totalBooks, formats);
+    }
+
+    public async Task<IReadOnlyList<PublicReadDto>> GetRecentPublicReadsAsync(
+        CancellationToken cancellationToken = default) =>
+        await _db.ReadEntries
+            .OrderByDescending(e => e.CreatedAt)
+            .Take(PublicFeedSize)
+            .Select(e => new PublicReadDto(
+                e.Book.Title, e.Book.Author, e.Book.CoverUrl, e.Format, e.CreatedAt, e.Rating))
+            .ToListAsync(cancellationToken);
+
+    /// <summary>Escapes LIKE metacharacters so a search term is matched literally.</summary>
+    private static string EscapeLike(string value) =>
+        value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    /// <summary>
+    /// Reuses the catalogue Book for this provider id, or creates it. Tolerates a
+    /// concurrent creation losing the race on the unique <c>OpenLibraryId</c> index.
+    /// </summary>
+    private async Task<Book> GetOrCreateBookAsync(LogBookRequest request, CancellationToken cancellationToken)
+    {
+        var existing = await _db.Books
+            .FirstOrDefaultAsync(b => b.OpenLibraryId == request.OpenLibraryId, cancellationToken);
+        if (existing is not null)
+        {
+            return existing; // reuse as-is — the first logger's metadata wins
+        }
+
+        var book = new Book
+        {
+            OpenLibraryId = request.OpenLibraryId,
+            Title = request.Title,
+            Author = request.Author,
+            CoverUrl = request.CoverUrl,
+            PageCount = request.PageCount,
+            FirstPublishYear = request.FirstPublishYear,
+        };
+        _db.Books.Add(book);
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+            return book;
+        }
+        catch (DbUpdateException)
+        {
+            // A concurrent request created the same book first; use that row instead.
+            _logger.LogInformation("Lost a race creating book {OpenLibraryId}; reusing the existing row.",
+                request.OpenLibraryId);
+            _db.Entry(book).State = EntityState.Detached;
+            return await _db.Books.FirstAsync(b => b.OpenLibraryId == request.OpenLibraryId, cancellationToken);
+        }
+    }
+}

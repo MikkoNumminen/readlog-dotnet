@@ -349,10 +349,72 @@ first real protected page. 54 tests total.
 
 ---
 
+## PR5 — CRUD & business services
+
+### Server actions → a domain service
+
+The original's `src/lib/actions.ts` server actions become methods on
+`IReadLogService` (`ReadLogService`), registered scoped in DI. One cohesive service
+covers logging, the library, the "have I read this?" lookup, edit/delete, account
+stats and the public feed — they're all `ReadEntry` queries, so splitting them into
+separate classes would be abstraction for its own sake.
+
+| Server action | Service method |
+| --- | --- |
+| `logBook` | `LogBookAsync` |
+| `getMyBooks` | `GetMyBooksAsync` |
+| `checkIfRead` | `CheckIfReadAsync` |
+| `updateReadEntry` | `UpdateReadEntryAsync` |
+| `deleteReadEntry` | `DeleteReadEntryAsync` |
+| `getAccountStats` | `GetAccountStatsAsync` |
+| `getRecentPublicReads` | `GetRecentPublicReadsAsync` |
+
+### Auth lives in the page, not the service
+
+The original actions read the session and check auth inline. The port inverts that:
+the **service takes the acting `userId` as a parameter** and never touches
+`HttpContext`. Pages enforce authentication (`[Authorize]`) and pass the id in. This
+keeps the service a pure, fully unit-testable domain layer (the tests construct it
+over an in-memory SQLite context with no web host).
+
+### DTOs + validation
+
+Input is bound to `LogBookRequest` / `UpdateReadEntryRequest` with **DataAnnotations**
+(`[Required]`, `[StringLength]`, `[Range(0,5)]` for ratings, `[Url]`); results are
+immutable `record` DTOs (`LibraryEntryDto`, `PublicReadDto`, `AccountStats`) projected
+straight from the query, so only the needed columns leave the database.
+
+### Behaviours carried over exactly
+
+- **Ownership returns 404, not 403**: edit/delete combine existence + ownership in one
+  query — `FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId)` → `false`
+  (the page maps that to `NotFound()`), so a non-owner can't even tell the entry exists.
+- **Rating null vs 0**: `null` clears the rating; `0` is a real value — both round-trip.
+- **`checkIfRead` is case-insensitive**: `EF.Functions.Like` (SQLite `LIKE` is ASCII
+  case-insensitive) with the user's `% _ \` escaped so a search term can't inject
+  wildcards; a blank query short-circuits to empty.
+- **Find-or-create the shared Book**: log reuses the catalogue row for an
+  `OpenLibraryId` (the first logger's metadata wins) and creates the entry. The unique
+  index race is handled — on a `DbUpdateException` the duplicate is detached and the
+  winning row re-fetched.
+- **Shared-title hazard preserved**: editing a title edits the shared `Book`, so it
+  changes the title for every user's entry of that book — faithful to the original
+  (a per-entry title override would localise it; deliberately out of scope).
+- **Account stats** return only the aggregate (count + per-format `GroupBy`); the page
+  merges the live profile (name/email) from the `ClaimsPrincipal`.
+- **Public feed** projects to `PublicReadDto`, which carries **no user fields**.
+
+### Caching
+
+These services are not cached — a `Where(userId)`/`Count`/`GroupBy` over a local SQLite
+file is cheap, so caching them would be premature. The public-feed read is the one hot,
+shared query; `OutputCache` for it is applied at the page in PR6 (book-details caching
+already lives in PR3).
+
+---
+
 ## Roadmap (documented as each PR lands)
 
-- **PR5 — CRUD/business:** services + DI, DTOs + DataAnnotations validation,
-  ownership checks (404-not-403), rating null-vs-0 semantics, `IOptions`, `ILogger`.
 - **PR6 — UI:** Razor Pages, PRG, antiforgery, ratings, the book-detail view.
 - **PR7 — Docker/deploy:** multi-stage Dockerfile, Azure App Service F1 Linux,
   startup migration.
