@@ -90,10 +90,94 @@ gated from PR1 onward.
 
 ---
 
+## PR2 — Data layer (EF Core + SQLite)
+
+### EF Core vs Prisma
+
+Prisma is a schema-first ORM: you write `schema.prisma`, run codegen, and get a
+generated client. EF Core is **code-first** here: the C# entity classes + the
+`DbContext` fluent configuration *are* the schema, and `dotnet ef migrations`
+diffs the model to produce migration code. Key mapping:
+
+| Prisma | EF Core |
+| --- | --- |
+| `schema.prisma` model | POCO entity class (`Models/Book.cs`, …) |
+| generated `PrismaClient` | `ApplicationDbContext` (hand-written, DI-injected) |
+| `prisma db push` | `dotnet ef migrations add` + `Database.Migrate()` |
+| `@@index` / `@@unique` | `HasIndex(...).IsUnique()` in `OnModelCreating` |
+| `@relation(onDelete:)` | `.OnDelete(DeleteBehavior.Cascade/Restrict)` |
+| `@default(now())` | a `SaveChanges` override (see below) |
+| Postgres `enum` | C# `enum` + `HasConversion<string>()` |
+
+### DbContext + DI
+
+`ApplicationDbContext` is registered with `AddDbContext` (scoped lifetime — one
+context per request, the EF Core default). It inherits `IdentityDbContext<ApplicationUser>`
+so the Identity tables (`AspNetUsers`, `AspNetUserLogins`, …) and the app tables
+live in one context and one migration. The original's `db.ts` `globalThis`
+singleton (a workaround for Next.js hot-reload) has no equivalent — DI owns the
+lifetime.
+
+### Entity decisions
+
+- **`int` primary keys for `Book`/`ReadEntry`** instead of the original `cuid()`
+  strings. cuid is a JS-ecosystem convention; for a single SQLite database,
+  autoincrement `int` keys are the idiomatic, compact EF choice. `ApplicationUser`
+  keeps Identity's `string` GUID key.
+- **`ApplicationUser : IdentityUser`** carries the original `User`'s extra
+  profile fields (`Name`, `Image`, `CreatedAt`). The NextAuth `Account` /
+  `Session` / `VerificationToken` tables are dropped — Identity owns logins
+  (`AspNetUserLogins`) and sessions are an auth cookie, not DB rows (see PR4).
+- **`FinishedAt` is a `DateOnly`**, not a `DateTime`. The original stored a
+  `YYYY-MM-DD` string parsed to UTC-midnight; `DateOnly` says exactly that
+  ("the day it was finished") and is the idiomatic .NET type. `CreatedAt` stays
+  a `DateTime` (a real instant, used to order the public feed).
+- **`Format` is a C# `enum` persisted as its string name** (`HasConversion<string>()`),
+  so the column reads `Book`/`Audiobook`/`Ebook` rather than an opaque ordinal.
+- **`required string Title`** — with nullable reference types on, `required`
+  enforces the non-null invariant at construction time, matching the schema.
+
+### Table naming — dropped the `readlog_` prefix
+
+The original `@@map("readlog_*")` existed only so the app could share one Postgres
+instance with other apps. A dedicated SQLite file has no such constraint, so the
+port uses idiomatic default table names (`Books`, `ReadEntries`, `AspNetUsers`).
+
+### `CreatedAt` auditing
+
+Rather than a database default (SQLite's `CURRENT_TIMESTAMP` is only
+second-precision and provider-specific), entities implement a small `ICreatedAt`
+marker and `ApplicationDbContext` overrides `SaveChanges`/`SaveChangesAsync` to
+stamp `CreatedAt = DateTime.UtcNow` on insert. This is provider-agnostic, gives
+full precision, and is a common EF auditing pattern.
+
+### A constraint the original lacked
+
+`ReadEntry.Rating` gets a DB **check constraint** (`Rating IS NULL OR 0..5`).
+The original enforced the 0–5 range only in the UI; defence-in-depth at the
+schema is cheap and correct. The null-vs-0 semantics (null = unrated, 0 = a real
+rating) are preserved.
+
+### Migrations, design-time factory, startup migrate
+
+`dotnet ef` is pinned in a committed local tool manifest (`.config/dotnet-tools.json`).
+A `DesignTimeDbContextFactory` lets the tooling build the context **without booting
+the app**, so `migrations add` never trips the startup migration. At runtime,
+`Database.Migrate()` runs on startup so a clean database is created/upgraded
+automatically — satisfying "migrations work from a clean DB".
+
+### SQLite foreign keys in tests
+
+EF Core enables `PRAGMA foreign_keys=ON` on the connections it opens, so
+cascade/restrict work in the app. Tests that share a hand-opened in-memory
+connection set `Foreign Keys=True` explicitly, and exercise delete behaviour in a
+*fresh* context (untracked dependents) so the assertion verifies the **database**
+constraint, not EF's client-side cascade.
+
+---
+
 ## Roadmap (documented as each PR lands)
 
-- **PR2 — Data layer:** EF Core vs Prisma, the `DbContext`, entity mapping
-  (`@@map`/cuid/enums/indexes/delete behaviour), migrations vs `db push`.
 - **PR3 — Integrations:** typed `HttpClient` + `IHttpClientFactory`, async fan-out
   (`Task.WhenAll` vs `Promise.allSettled`), the provider failure asymmetry.
 - **PR4 — Auth:** how NextAuth (Google + DB sessions) maps to ASP.NET Core Identity

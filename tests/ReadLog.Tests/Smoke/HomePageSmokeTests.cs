@@ -1,17 +1,17 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
+using ReadLog.Tests.Infrastructure;
 
 namespace ReadLog.Tests.Smoke;
 
 /// <summary>
-/// Boots the real application in-memory and verifies the home page is served.
-/// This is the scaffold's "does it actually run?" guard for CI.
+/// Boots the real application (against an isolated temp database) and verifies the
+/// home page is served — the "does it actually run, migrations and all?" guard.
 /// </summary>
-public class HomePageSmokeTests : IClassFixture<WebApplicationFactory<Program>>
+public class HomePageSmokeTests : IClassFixture<ReadLogAppFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly ReadLogAppFactory _factory;
 
-    public HomePageSmokeTests(WebApplicationFactory<Program> factory)
+    public HomePageSmokeTests(ReadLogAppFactory factory)
     {
         _factory = factory;
     }

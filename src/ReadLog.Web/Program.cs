@@ -1,11 +1,24 @@
+using Microsoft.EntityFrameworkCore;
+using ReadLog.Web.Data;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // --- Services -------------------------------------------------------------
-// Razor Pages is the UI model for ReadLog. Data, integrations, auth and the
-// domain services are registered in later chunks of the port.
 builder.Services.AddRazorPages();
 
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlite(connectionString));
+
 var app = builder.Build();
+
+// Apply pending EF Core migrations at startup so a clean database just works.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
 
 // --- HTTP pipeline --------------------------------------------------------
 if (!app.Environment.IsDevelopment())
