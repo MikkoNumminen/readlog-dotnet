@@ -36,8 +36,8 @@ public partial class BookSearchService : IBookSearchService
         string query, CancellationToken cancellationToken = default)
     {
         // Start both providers, then await together — a failure in one must not sink the other.
-        var openLibraryTask = SearchSafelyAsync("Open Library", () => _openLibrary.SearchAsync(query, cancellationToken));
-        var googleTask = SearchSafelyAsync("Google Books", () => _googleBooks.SearchAsync(query, cancellationToken));
+        var openLibraryTask = SearchSafelyAsync("Open Library", () => _openLibrary.SearchAsync(query, cancellationToken), cancellationToken);
+        var googleTask = SearchSafelyAsync("Google Books", () => _googleBooks.SearchAsync(query, cancellationToken), cancellationToken);
 
         var results = await Task.WhenAll(openLibraryTask, googleTask);
 
@@ -46,11 +46,15 @@ public partial class BookSearchService : IBookSearchService
     }
 
     private async Task<IReadOnlyList<BookSearchResult>> SearchSafelyAsync(
-        string source, Func<Task<IReadOnlyList<BookSearchResult>>> search)
+        string source, Func<Task<IReadOnlyList<BookSearchResult>>> search, CancellationToken cancellationToken)
     {
         try
         {
             return await search();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw; // caller-initiated cancellation must surface, not degrade to empty results
         }
         catch (Exception ex)
         {

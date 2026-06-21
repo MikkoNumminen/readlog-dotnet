@@ -142,4 +142,97 @@ public class GoogleBooksClientTests
         Assert.Null(await client.GetDetailsAsync("Dune", null));
         Assert.Equal(0, handler.CallCount);
     }
+
+    [Fact]
+    public async Task SearchAsync_builds_the_request_url_with_key_max_results_and_escaping()
+    {
+        var handler = StubHttpMessageHandler.Json("""{ "items": [] }""");
+        var client = new GoogleBooksClient(handler.CreateClient(BaseAddress), WithKey("test-key"));
+
+        await client.SearchAsync("a b & c");
+
+        var requestUri = handler.Requests[0].RequestUri!;
+        Assert.Contains("q=a%20b%20%26%20c", requestUri.Query);
+        Assert.Contains("maxResults=15", requestUri.Query);
+        Assert.Contains("key=test-key", requestUri.Query);
+    }
+
+    [Fact]
+    public async Task GetDetailsAsync_requests_a_single_result()
+    {
+        var handler = StubHttpMessageHandler.Json("""{ "items": [] }""");
+        var client = new GoogleBooksClient(handler.CreateClient(BaseAddress), WithKey("k"));
+
+        await client.GetDetailsAsync("Dune", "Frank Herbert");
+
+        Assert.Contains("maxResults=1", handler.Requests[0].RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task GetDetailsAsync_returns_null_without_http_for_a_blank_title_and_no_author()
+    {
+        var handler = StubHttpMessageHandler.Json("""{ "items": [] }""");
+        var client = new GoogleBooksClient(handler.CreateClient(BaseAddress), WithKey("k"));
+
+        Assert.Null(await client.GetDetailsAsync("   ", null));
+        Assert.Equal(0, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task GetDetailsAsync_maps_all_authors_and_leaves_an_https_cover_unchanged()
+    {
+        const string json = """
+        {
+          "items": [
+            {
+              "id": "x",
+              "volumeInfo": {
+                "title": "Dune",
+                "authors": ["Frank Herbert", "Brian Herbert"],
+                "imageLinks": { "thumbnail": "https://already.secure/cover.jpg" }
+              }
+            }
+          ]
+        }
+        """;
+        var handler = StubHttpMessageHandler.Json(json);
+        var client = new GoogleBooksClient(handler.CreateClient(BaseAddress), WithKey("k"));
+
+        var details = await client.GetDetailsAsync("Dune", null);
+
+        Assert.NotNull(details);
+        Assert.Equal(["Frank Herbert", "Brian Herbert"], details.Authors);
+        Assert.Equal("https://already.secure/cover.jpg", details.CoverUrl);
+    }
+
+    [Fact]
+    public async Task GetDetailsAsync_returns_a_null_cover_when_there_are_no_image_links()
+    {
+        var handler = StubHttpMessageHandler.Json("""{ "items": [ { "id": "x", "volumeInfo": { "title": "No cover" } } ] }""");
+        var client = new GoogleBooksClient(handler.CreateClient(BaseAddress), WithKey("k"));
+
+        var details = await client.GetDetailsAsync("No cover", null);
+
+        Assert.NotNull(details);
+        Assert.Null(details.CoverUrl);
+    }
+
+    [Theory]
+    [InlineData("1969-10-15", 1969)]
+    [InlineData("1965", 1965)]
+    [InlineData("198?", 198)]   // MARC-style fuzzy date
+    [InlineData("19uu", 19)]    // MARC-style fuzzy date
+    [InlineData("0000", null)]  // parseInt's `0 || null`
+    [InlineData("unknown", null)]
+    [InlineData(null, null)]
+    public async Task SearchAsync_parses_the_publish_year_like_parseInt(string? publishedDate, int? expected)
+    {
+        var dateJson = publishedDate is null ? "null" : $"\"{publishedDate}\"";
+        var json = $$"""{ "items": [ { "id": "y", "volumeInfo": { "title": "T", "publishedDate": {{dateJson}} } } ] }""";
+        var handler = StubHttpMessageHandler.Json(json);
+        var client = new GoogleBooksClient(handler.CreateClient(BaseAddress), WithKey("k"));
+
+        var book = Assert.Single(await client.SearchAsync("t"));
+        Assert.Equal(expected, book.FirstPublishYear);
+    }
 }

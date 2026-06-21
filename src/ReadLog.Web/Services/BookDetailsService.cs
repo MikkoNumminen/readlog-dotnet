@@ -32,7 +32,10 @@ public class BookDetailsService : IBookDetailsService
     public async Task<BookDetails?> GetDetailsAsync(
         string title, string? author, CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"book-details:{title}|{author}";
+        // Tuple key: structural equality avoids the delimiter ambiguity a "{title}|{author}"
+        // string would have, and trim + lower-case lets case/whitespace variants of the same
+        // book share one cache entry.
+        var cacheKey = ("book-details", title.Trim().ToLowerInvariant(), author?.Trim().ToLowerInvariant());
         if (_cache.TryGetValue(cacheKey, out BookDetails? cached))
         {
             return cached;

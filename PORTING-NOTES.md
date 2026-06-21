@@ -234,7 +234,10 @@ in an env var / app setting — never in `appsettings.json`.
 ### Caching details with `IMemoryCache`
 
 `getBookDetails` used `unstable_cache` with a 30-day TTL. The port uses
-`IMemoryCache` with a 30-day absolute expiration, keyed `book-details:{title}|{author}`.
+`IMemoryCache` with a 30-day absolute expiration, keyed by a
+`("book-details", title, author)` **ValueTuple** (structural equality — no
+delimiter-collision risk a `"{title}|{author}"` string would carry), with the
+components trimmed + lower-cased so case/whitespace variants share an entry.
 One deliberate improvement: **only non-null results are cached**, so a transient
 failure or a missing API key is retried rather than cached as "no details" for a
 month. (`IMemoryCache` is right for a single-instance app; a multi-instance deploy

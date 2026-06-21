@@ -75,6 +75,19 @@ public class BookSearchServiceTests
         Assert.Equal("/works/OL1W", book.OpenLibraryId);
     }
 
+    [Fact]
+    public async Task SearchAsync_propagates_caller_cancellation_rather_than_degrading_to_empty()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var service = Build(
+            new StubOpenLibrary(new OperationCanceledException(cts.Token)),
+            new StubGoogle([Result("google:g1", "Foundation")]));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => service.SearchAsync("foundation", cts.Token));
+    }
+
     private sealed class StubOpenLibrary : IOpenLibraryClient
     {
         private readonly IReadOnlyList<BookSearchResult>? _result;

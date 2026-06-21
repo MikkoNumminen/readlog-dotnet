@@ -69,6 +69,11 @@ public class GoogleBooksClient : IGoogleBooksClient
         }
 
         var query = string.Join(" ", new[] { title, author }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
         var url = $"volumes?q={Uri.EscapeDataString(query)}&maxResults=1&key={Uri.EscapeDataString(_apiKey)}";
 
         using var response = await _http.GetAsync(url, cancellationToken);
@@ -136,8 +141,13 @@ public class GoogleBooksClient : IGoogleBooksClient
             return null;
         }
 
-        var prefix = publishedDate.Length >= 4 ? publishedDate[..4] : publishedDate;
-        return int.TryParse(prefix, out var year) ? year : null;
+        // Mirror the original's `parseInt(date.slice(0, 4), 10) || null`: from the first
+        // four characters, take the leading run of digits (after any whitespace) — so
+        // MARC-style fuzzy dates like "198?" / "19uu" still yield 198 / 19 — and treat
+        // no-digits or 0 as null.
+        var slice = publishedDate.Length >= 4 ? publishedDate[..4] : publishedDate;
+        var digits = new string(slice.TrimStart().TakeWhile(char.IsAsciiDigit).ToArray());
+        return int.TryParse(digits, out var year) && year != 0 ? year : null;
     }
 
     // --- Wire DTOs (Google Books volumes shape) ---------------------------

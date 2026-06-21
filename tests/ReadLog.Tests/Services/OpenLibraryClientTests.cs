@@ -74,4 +74,19 @@ public class OpenLibraryClientTests
         Assert.Null(book.PageCount);
         Assert.Null(book.FirstPublishYear);
     }
+
+    [Fact]
+    public async Task SearchAsync_builds_the_request_url_with_escaping_limit_and_fields()
+    {
+        var handler = StubHttpMessageHandler.Json("""{ "docs": [] }""");
+        var client = new OpenLibraryClient(handler.CreateClient("https://openlibrary.org/"));
+
+        await client.SearchAsync("dune messiah & co");
+
+        var requestUri = handler.Requests[0].RequestUri!;
+        Assert.Equal("/search.json", requestUri.AbsolutePath);
+        Assert.Contains("q=dune%20messiah%20%26%20co", requestUri.Query);
+        Assert.Contains("limit=15", requestUri.Query);
+        Assert.Contains("number_of_pages_median", requestUri.Query); // the fields list
+    }
 }
