@@ -1,0 +1,22 @@
+<Project>
+
+  <!--
+    Solution-wide build settings. Centralising these here keeps every .csproj small
+    and guarantees the same language/nullable/analysis rules across web and tests.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!-- Treat nullable-reference-type violations as build errors: the port's
+         nullability is a first-class correctness concern, not a suggestion. -->
+    <WarningsAsErrors>nullable</WarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+</Project>

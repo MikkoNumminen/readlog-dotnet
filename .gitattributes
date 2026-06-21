@@ -1,0 +1,24 @@
+# Normalise line endings: text files are LF in the repo, checked out native.
+# Keeps Windows dev + Linux CI/Docker consistent and avoids CRLF churn.
+* text=auto eol=lf
+
+# Explicit text types
+*.cs        text eol=lf
+*.cshtml    text eol=lf
+*.csproj    text eol=lf
+*.props     text eol=lf
+*.sln       text eol=lf -crlf
+*.json      text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.config    text eol=lf
+
+# Binary assets — never normalise
+*.png       binary
+*.jpg       binary
+*.ico       binary
+*.woff      binary
+*.woff2     binary
+*.db        binary

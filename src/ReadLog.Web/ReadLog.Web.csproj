@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- Common settings (TFM, nullable, implicit usings, analysis) live in
+       ../../Directory.Build.props. -->
+  <PropertyGroup>
+    <RootNamespace>ReadLog.Web</RootNamespace>
+    <UserSecretsId>readlog-web-2b1c7a4e-9d2f-4c6a-8f1b-3e5d7a9c0b21</UserSecretsId>
+  </PropertyGroup>
+
+</Project>

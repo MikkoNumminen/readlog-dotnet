@@ -1,0 +1,117 @@
+/* ReadLog theme — ported from the original MUI palette.
+   primary #5D4E37 (espresso), secondary #8B6914 (ochre),
+   page bg #FAFAF5, surfaces #FFFFFF. */
+
+:root {
+    --rl-primary: #5d4e37;
+    --rl-primary-dark: #3e2723;
+    --rl-secondary: #8b6914;
+    --rl-bg: #fafaf5;
+    --rl-surface: #ffffff;
+    --rl-text: #2e2a23;
+
+    /* Re-point Bootstrap's primary onto the ReadLog espresso brown.
+       (Link colours are themed by the explicit `a {}` rules below — the bundled
+       Bootstrap 5.1 hard-codes anchor colour and has no --bs-link-color* vars.) */
+    --bs-primary: var(--rl-primary);
+    --bs-primary-rgb: 93, 78, 55;
+}
+
+html {
+    position: relative;
+    min-height: 100%;
+    font-size: 14px;
+}
+
+@media (min-width: 768px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+body {
+    margin: 0;
+    margin-bottom: 60px;
+    background-color: var(--rl-bg);
+    color: var(--rl-text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.rl-navbar {
+    background-color: var(--rl-surface);
+    border-bottom: 1px solid rgba(93, 78, 55, 0.15);
+    box-shadow: 0 1px 3px rgba(62, 39, 35, 0.06);
+}
+
+.rl-brand {
+    font-weight: 700;
+    color: var(--rl-primary) !important;
+}
+
+.rl-navbar .nav-link {
+    color: var(--rl-primary);
+    font-weight: 500;
+}
+
+.rl-navbar .nav-link:hover,
+.rl-navbar .nav-link.active {
+    color: var(--rl-primary-dark);
+}
+
+.rl-main {
+    min-height: 70vh;
+}
+
+/* Buttons / accents map onto the brand browns. */
+.btn-primary {
+    --bs-btn-bg: var(--rl-primary);
+    --bs-btn-border-color: var(--rl-primary);
+    --bs-btn-hover-bg: var(--rl-primary-dark);
+    --bs-btn-hover-border-color: var(--rl-primary-dark);
+    --bs-btn-active-bg: var(--rl-primary-dark);
+    --bs-btn-active-border-color: var(--rl-primary-dark);
+    --bs-btn-disabled-bg: var(--rl-primary);
+    --bs-btn-disabled-border-color: var(--rl-primary);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--rl-primary);
+    --bs-btn-border-color: var(--rl-primary);
+    --bs-btn-hover-bg: var(--rl-primary);
+    --bs-btn-hover-border-color: var(--rl-primary);
+    --bs-btn-active-bg: var(--rl-primary-dark);
+    --bs-btn-active-border-color: var(--rl-primary-dark);
+}
+
+a {
+    color: var(--rl-primary);
+}
+
+a:hover {
+    color: var(--rl-primary-dark);
+}
+
+.rl-footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    white-space: nowrap;
+    line-height: 60px;
+    background-color: var(--rl-surface);
+    border-top: 1px solid rgba(93, 78, 55, 0.15);
+}
+
+/* Simple hero used by the landing page. */
+.rl-hero {
+    text-align: center;
+    padding: 3rem 1rem;
+}
+
+.rl-hero h1 {
+    color: var(--rl-primary);
+    font-weight: 700;
+}
+
+.rl-hero .lead {
+    color: var(--rl-secondary);
+}
