@@ -176,10 +176,83 @@ constraint, not EF's client-side cascade.
 
 ---
 
+## PR3 — Book-search integrations
+
+### Typed `HttpClient` instead of `fetch`
+
+The original calls `fetch()` directly. The idiomatic .NET equivalent is a **typed
+`HttpClient`** registered through `IHttpClientFactory` (`AddHttpClient<IClient, Client>`):
+`OpenLibraryClient` and `GoogleBooksClient` each get an `HttpClient` with a configured
+`BaseAddress`, timeout and (for Open Library) a `User-Agent`. The factory pools and
+recycles the underlying handlers, avoiding socket exhaustion — the problem the
+original's environment hid behind serverless. Each client exposes a small interface
+so the search/details services depend on an abstraction, not on HTTP.
+
+### JSON deserialization
+
+`System.Text.Json` with `PropertyNameCaseInsensitive = true` plus `[JsonPropertyName]`
+on the wire DTOs maps Open Library's `snake_case` (`author_name`,
+`number_of_pages_median`, `cover_i`) and Google's `camelCase`. The wire DTOs are
+`private sealed record`s living next to their client — they're an implementation
+detail, not part of the app's surface (the app speaks `BookSearchResult` / `BookDetails`).
+
+### Async + cancellation
+
+Every I/O method is `async` and takes a `CancellationToken` (defaulted), threaded
+through `GetAsync`/`ReadFromJsonAsync`. This is the .NET norm and lets a dropped
+request abort the outbound HTTP call — something the original couldn't express.
+
+### The provider-failure asymmetry, preserved
+
+The original relies on `Promise.allSettled`: Open Library **throws** on a non-OK
+response while Google **returns `[]`**, and the settled wrapper means one failing
+provider never sinks the search. The port keeps that exact shape:
+
+- `OpenLibraryClient` throws `HttpRequestException` on non-success;
+- `GoogleBooksClient` returns `[]`/`null`;
+- `BookSearchService` starts both tasks, awaits them with `Task.WhenAll`, and wraps
+  each in a `try/catch` that logs and degrades to `[]` — the `allSettled` equivalent.
+  Open Library is concatenated first, so it wins de-dup ties.
+
+### De-dup + scoring
+
+Ported faithfully: normalise `title|author` (lower-case, strip non-alphanumerics via
+a source-generated `[GeneratedRegex]`), keep the first occurrence's position but
+upgrade to the richer duplicate (score = has-cover + has-page-count). A
+`List` + `Dictionary<key,index>` reproduces the JS `Map`'s insertion-order-preserving
+"replace value, keep position" semantics. "First or null" on the provider lists uses
+**list patterns** (`is [var first, ..]`) rather than `FirstOrDefault`.
+
+### Configuration via `IOptions`
+
+The Google Books API key moves from `process.env.GOOGLE_BOOKS_API_KEY` to
+`GoogleBooksOptions` bound from the `GoogleBooks` config section and injected as
+`IOptions<GoogleBooksOptions>`. Absent key ⇒ the Google integration is skipped with
+no HTTP call (same as the original). In dev the key belongs in user-secrets, in prod
+in an env var / app setting — never in `appsettings.json`.
+
+### Caching details with `IMemoryCache`
+
+`getBookDetails` used `unstable_cache` with a 30-day TTL. The port uses
+`IMemoryCache` with a 30-day absolute expiration, keyed `book-details:{title}|{author}`.
+One deliberate improvement: **only non-null results are cached**, so a transient
+failure or a missing API key is retried rather than cached as "no details" for a
+month. (`IMemoryCache` is right for a single-instance app; a multi-instance deploy
+would swap in `IDistributedCache`/`HybridCache` behind the same interface.)
+
+### Testing
+
+A `StubHttpMessageHandler` returns canned JSON / status codes and records requests,
+so the client tests assert mapping, the cover-URL build, `http→https`, the
+series-subtitle logic, year parsing, the throw-vs-empty contracts, and that a blank
+query or missing key makes **no HTTP call**. The service tests use hand-written stub
+clients to prove de-dup/scoring, Open-Library-first ordering, the failure resilience,
+and the cache (hit, null-not-cached, per-(title,author) keying). 30 tests total.
+
+---
+
 ## Roadmap (documented as each PR lands)
 
-- **PR3 — Integrations:** typed `HttpClient` + `IHttpClientFactory`, async fan-out
-  (`Task.WhenAll` vs `Promise.allSettled`), the provider failure asymmetry.
 - **PR4 — Auth:** how NextAuth (Google + DB sessions) maps to ASP.NET Core Identity
   + the application cookie + optional Google external login.
 - **PR5 — CRUD/business:** services + DI, DTOs + DataAnnotations validation,

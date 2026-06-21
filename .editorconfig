@@ -368,3 +368,9 @@ dotnet_naming_style.s_camelcase.capitalization = camel_case
 [**/Migrations/*.cs]
 generated_code = true
 
+# CA1848 pushes LoggerMessage source-gen delegates for every log call. That's a
+# high-throughput-library optimisation; for this small app's rare, non-hot-path
+# logging the readable ILogger extension methods are the idiomatic choice.
+[*.cs]
+dotnet_diagnostic.CA1848.severity = none
+
