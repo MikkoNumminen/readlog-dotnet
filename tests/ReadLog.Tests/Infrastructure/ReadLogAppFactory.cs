@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ReadLog.Web.Data;
 
 namespace ReadLog.Tests.Infrastructure;
 
@@ -9,7 +12,7 @@ namespace ReadLog.Tests.Infrastructure;
 /// Boots the real application for integration tests against an isolated, temporary
 /// SQLite file (so tests never touch the developer's <c>readlog.db</c>). The app's
 /// own wiring — including the startup migration — runs unchanged; only the
-/// connection string is overridden.
+/// <see cref="ApplicationDbContext"/> registration is repointed at the temp file.
 /// </summary>
 public class ReadLogAppFactory : WebApplicationFactory<Program>
 {
@@ -18,12 +21,18 @@ public class ReadLogAppFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.ConfigureAppConfiguration((_, config) =>
+        builder.ConfigureTestServices(services =>
         {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
+            // Replace the app's SQLite options with one pointed at the isolated temp file.
+            var descriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
+            if (descriptor is not null)
             {
-                ["ConnectionStrings:Default"] = $"Data Source={_dbPath}",
-            });
+                services.Remove(descriptor);
+            }
+
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseSqlite($"Data Source={_dbPath}"));
         });
     }
 

@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Mvc.Testing;
 using ReadLog.Tests.Infrastructure;
 
 namespace ReadLog.Tests.Auth;
@@ -105,6 +106,80 @@ public class AuthenticationTests : IClassFixture<ReadLogAppFactory>
         Assert.Contains("passwords do not match", await response.Content.ReadAsStringAsync());
     }
 
+    [Fact]
+    public async Task Registering_a_duplicate_email_is_rejected()
+    {
+        var client = _factory.CreateClient();
+        const string email = "duplicate@example.com";
+        await RegisterAsync(client, email, "Password1");
+        await LogoutAsync(client);
+
+        var response = await PostFormAsync(client, "/register", new Dictionary<string, string>
+        {
+            ["Input.Email"] = email,
+            ["Input.Password"] = "Password2",
+            ["Input.ConfirmPassword"] = "Password2",
+            ["ReturnUrl"] = "/",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode); // re-rendered, not signed in
+        Assert.Contains("already taken", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Navbar_greets_a_named_user_by_display_name()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await PostFormAsync(client, "/register", new Dictionary<string, string>
+        {
+            ["Input.Name"] = "Ada Lovelace",
+            ["Input.Email"] = "ada@example.com",
+            ["Input.Password"] = "Password1",
+            ["Input.ConfirmPassword"] = "Password1",
+            ["ReturnUrl"] = "/",
+        });
+        response.EnsureSuccessStatusCode();
+
+        var home = await client.GetStringAsync("/");
+        Assert.Contains("Ada Lovelace", home);
+    }
+
+    [Fact]
+    public async Task A_GET_to_signout_does_not_sign_the_user_out()
+    {
+        // No-redirect client so we can observe the raw 302 responses.
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var token = HtmlFormHelper.ExtractAntiforgeryToken(await client.GetStringAsync("/register"));
+        var register = await client.PostAsync("/register", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["Input.Email"] = "getsignout@example.com",
+            ["Input.Password"] = "Password1",
+            ["Input.ConfirmPassword"] = "Password1",
+            ["__RequestVerificationToken"] = token,
+            ["ReturnUrl"] = "/",
+        }));
+        Assert.Equal(HttpStatusCode.Redirect, register.StatusCode); // signed in, redirected home
+
+        var getSignout = await client.GetAsync("/signout");
+        Assert.Equal(HttpStatusCode.Redirect, getSignout.StatusCode); // GET only redirects
+
+        var home = await client.GetStringAsync("/");
+        Assert.Contains("Sign out", home); // still authenticated
+    }
+
+    [Fact]
+    public async Task A_GET_to_external_login_redirects_to_signin()
+    {
+        var client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/external-login");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("/signin", response.Headers.Location!.OriginalString);
+    }
+
     private static async Task RegisterAsync(HttpClient client, string email, string password)
     {
         var response = await PostFormAsync(client, "/register", new Dictionary<string, string>
@@ -130,7 +205,11 @@ public class AuthenticationTests : IClassFixture<ReadLogAppFactory>
 
     private static async Task LogoutAsync(HttpClient client)
     {
-        var response = await PostFormAsync(client, "/signout", new Dictionary<string, string>());
+        // The sign-out form (with its antiforgery token) lives in the navbar of any page,
+        // so take the token from the home page rather than GET /signout (which redirects).
+        var token = HtmlFormHelper.ExtractAntiforgeryToken(await client.GetStringAsync("/"));
+        var response = await client.PostAsync("/signout",
+            new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = token }));
         response.EnsureSuccessStatusCode();
     }
 

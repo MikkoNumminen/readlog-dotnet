@@ -303,30 +303,49 @@ challenge/callback flow explicitly.
 
 `Login.OnPostExternalLogin` issues a `Challenge` to Google with a redirect to the
 `ExternalLogin` callback. The callback (`OnGetCallbackAsync`) signs the user in if
-the login is already linked; otherwise it provisions a local account from the
-provider's email/name claims, links the login (`AddLoginAsync`), and signs in.
-Linking by email means "register locally, later sign in with Google on the same
-email" attaches Google to the existing account.
+the login is already linked. Otherwise: if **no** local account exists for the
+email, it provisions one from the provider's email/name claims, links the login
+(`AddLoginAsync`), and signs in; if a local account **already** exists, it
+**refuses to auto-link** and tells the user to sign in locally first. That refusal
+is an account-takeover guard — an email-string match alone is not proof of
+ownership, so silently attaching the provider to a pre-existing password account
+would let an attacker who pre-created an account hijack it.
 
 ### Safety + config
 
 - **Open-redirect protection**: every post-auth redirect uses `LocalRedirect`,
   which rejects non-local URLs — so a crafted `?returnUrl=https://evil` can't bounce
   the user off-site.
+- **Brute-force throttling**: password sign-in uses `lockoutOnFailure: true` and
+  Identity lockout is configured (5 attempts → 5-minute lockout), so online password
+  guessing is bounded.
+- **Display name without a DB hit**: a custom `UserClaimsPrincipalFactory`
+  (`DisplayNameClaimsPrincipalFactory`) emits a `display_name` claim from
+  `ApplicationUser.Name` at sign-in; the navbar reads that claim (falling back to the
+  email) rather than querying the database on every render.
 - **No new migration**: the Identity tables were already created by PR2's
   `InitialCreate` (the context was `IdentityDbContext` from the start), so PR4 is
   pure behaviour — no schema change.
-- **Demo posture**: `RequireConfirmedAccount = false` (no email sender wired up) and
-  a relaxed-but-sane password policy (≥8 chars). Production would require email
-  confirmation and configure a sender.
+- **Demo posture (and its limits)**: `RequireConfirmedAccount = false` (no email
+  sender is wired up) and a relaxed-but-sane password policy (≥8 chars). Two known
+  consequences of skipping email confirmation: registration can be used to *enumerate*
+  which emails have accounts (Identity's default duplicate-email message), and
+  unverified emails are accepted. Production would require email confirmation (with a
+  configured sender), which closes both.
 
 ### Testing
 
-Six tests drive the real pages over HTTP — extracting the **antiforgery token** from
-each rendered form and carrying cookies across requests — to prove register-signs-in,
-the register→logout→login round-trip, wrong-password rejection, and password-mismatch
-validation. (The Google path is wired but not integration-tested; that would need an
-OAuth test double.) 50 tests total.
+Ten tests drive the real pages over HTTP — extracting the **antiforgery token** from
+each rendered form and carrying cookies across requests — covering register-signs-in,
+the register→logout→login round-trip, wrong-password rejection, password-mismatch and
+duplicate-email rejection, the display-name greeting, and that a **GET** to `/signout`
+does *not* sign the user out (CSRF safety). The integration host swaps the
+`ApplicationDbContext` onto an isolated temp SQLite file via `ConfigureTestServices`
+(an earlier connection-string override silently didn't apply, so tests had been
+sharing — and accumulating state in — the real `readlog.db`; the swap makes every run
+hermetic). The Google path is wired but not integration-tested (that needs an OAuth
+double), and the `[Authorize]`→`/signin` challenge is exercised in PR6 against the
+first real protected page. 54 tests total.
 
 ---
 

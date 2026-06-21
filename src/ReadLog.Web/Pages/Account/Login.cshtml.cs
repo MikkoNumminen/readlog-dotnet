@@ -60,12 +60,19 @@ public class LoginModel : PageModel
         }
 
         var result = await _signInManager.PasswordSignInAsync(
-            Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: false);
+            Input.Email, Input.Password, Input.RememberMe, lockoutOnFailure: true);
 
         if (result.Succeeded)
         {
             // LocalRedirect rejects non-local URLs, so it doubles as open-redirect protection.
             return LocalRedirect(returnUrl ?? Url.Content("~/"));
+        }
+
+        if (result.IsLockedOut)
+        {
+            ModelState.AddModelError(string.Empty,
+                "This account is temporarily locked after repeated failed attempts. Please try again later.");
+            return Page();
         }
 
         ModelState.AddModelError(string.Empty, "Invalid login attempt.");

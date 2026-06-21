@@ -58,25 +58,31 @@ public class ExternalLoginModel : PageModel
             return FailToLogin("The external provider did not supply an email address.", returnUrl);
         }
 
-        // Find an existing local account by email, or create one from the claims.
-        var user = await _userManager.FindByEmailAsync(email);
-        if (user is null)
+        // If a local account already exists for this email, do NOT silently link the
+        // external login to it: an email match alone is not proof of ownership, so
+        // auto-linking would be an account-takeover path. Require the user to sign in
+        // locally first (the external login can then be linked from their account).
+        if (await _userManager.FindByEmailAsync(email) is not null)
         {
-            user = new ApplicationUser
-            {
-                UserName = email,
-                Email = email,
-                Name = info.Principal.FindFirstValue(ClaimTypes.Name),
-            };
-
-            var createResult = await _userManager.CreateAsync(user);
-            if (!createResult.Succeeded)
-            {
-                return FailToLogin("Could not create an account from the external login.", returnUrl);
-            }
+            return FailToLogin(
+                "An account with this email already exists. Sign in with your password first, then link this provider.",
+                returnUrl);
         }
 
-        // Link the external login to the (new or existing) account, then sign in.
+        // No local account yet: provision one from the provider's claims and link the login.
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            Name = info.Principal.FindFirstValue(ClaimTypes.Name),
+        };
+
+        var createResult = await _userManager.CreateAsync(user);
+        if (!createResult.Succeeded)
+        {
+            return FailToLogin("Could not create an account from the external login.", returnUrl);
+        }
+
         var linkResult = await _userManager.AddLoginAsync(user, info);
         if (!linkResult.Succeeded)
         {
