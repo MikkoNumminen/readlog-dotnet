@@ -7,8 +7,9 @@ your personal library. There's also an account/stats page and a public
 "recently read" feed.
 
 This is an **idiomatic ASP.NET Core port** of the original
-[Next.js + Prisma + Postgres ReadLog](https://github.com/MikkoNumminen/ReadLog).
-The porting decisions (and *why* each one was made) are documented in
+[Next.js + Prisma + Postgres ReadLog](https://github.com/MikkoNumminen/ReadLog),
+which runs live at **<https://read-log-pi.vercel.app/>**. The porting decisions
+(and *why* each one was made) are documented in
 [`PORTING-NOTES.md`](PORTING-NOTES.md); the original app's behaviour is mapped
 in [`docs/SOURCE-MAP.md`](docs/SOURCE-MAP.md).
 

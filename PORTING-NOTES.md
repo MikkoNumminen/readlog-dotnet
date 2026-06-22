@@ -423,8 +423,77 @@ already lives in PR3).
 
 ---
 
-## Roadmap (documented as each PR lands)
+## PR6 — Razor Pages UI
 
-- **PR6 — UI:** Razor Pages, PRG, antiforgery, ratings, the book-detail view.
+### Pages
+
+`/` (public feed), `/book` (Google Books detail), `/library` + `/library/edit/{id}`,
+`/log`, `/account`. The four user pages are `[Authorize]`d; the page handlers read the
+user id from the cookie (`User.GetUserId()`) and delegate to `IReadLogService`.
+
+### From client interactivity to server round-trips
+
+The original is a SPA: live search, dialogs, `router.refresh()`. The port uses the
+idiomatic Razor Pages flow — **GET to read, POST to mutate, redirect after** (PRG):
+
+- **Log** is a single page with two GET states: a search form (`?title=&author=`)
+  whose results are rendered server-side, and — once a result's "Select" link is
+  followed (the chosen book travels in the query string) — a prefilled log form that
+  **POSTs** to create the entry and redirects to the library. The "Add … manually"
+  fallback links to the same form with a generated `manual:{guid}` id.
+- **Edit/Delete** is a dedicated page (`/library/edit/{id}`) rather than a modal —
+  GET shows the form, POST saves or deletes, then redirects. Ownership is enforced by
+  the service (a foreign entry → `NotFound()`), and delete is a separate antiforgery
+  form with a `confirm()` guard.
+- **"Have I read this?"** and the **grid/list** toggle are plain GET query params
+  (`?q=`, `?view=`) — no JavaScript.
+
+### `[Authorize]` instead of a client redirect
+
+The original gated `/log` with a `useEffect` that pushed to `/signin` (a brief blank
+flash). The port marks the page `[Authorize]`; the cookie middleware issues the
+`302 → /signin?ReturnUrl=…` server-side before any render — no flash, and the
+`ReturnUrl` round-trips the user back after login.
+
+### Ratings, formats, dates
+
+Read-only ratings render as filled/empty star spans (`_Stars` partial); the log/edit
+forms use a `<select>` (No rating + 1–5) — accessible and JS-free, matching the MUI
+Rating's effective "null or 1–5" behaviour. Formats use emoji + label
+(`FormatDisplay`) in place of MUI icon components.
+
+### Book detail — and sanitising untrusted HTML
+
+The detail view is a page (`/book`) rather than a modal. Google Books descriptions are
+HTML; the original rendered them with `dangerouslySetInnerHTML` (**unsanitised** — an
+XSS vector). The port runs the description through **HtmlSanitizer** before
+`@Html.Raw`, so only safe markup survives.
+
+### Caching the feed (data, not output)
+
+`OutputCache` on the home page would be wrong here: the shared layout's navbar varies
+per user (signed in vs out), and output caching would serve one user's navbar to
+another. So — like the original, which cached the *data* (`unstable_cache`) not the
+page — the feed query is cached in `IMemoryCache` (60 s) inside `ReadLogService` and
+**evicted on every write** (`logBook`/`update`/`delete` call `_cache.Remove`). That
+`Remove` is the direct analogue of the original's `updateTag("public-feed")`.
+
+### Errors
+
+`UseStatusCodePagesWithReExecute("/Error", "?code={0}")` re-runs the themed Error page
+for status codes; it shows a "Page not found" message for 404 and the generic apology
+(with request id) otherwise.
+
+### Tests
+
+Ten UI integration tests drive the real pages over HTTP against an isolated temp
+database (a fresh factory per test for deterministic ids): the **`[Authorize]` →
+`/signin?ReturnUrl=` redirect** for each protected page (the check deferred from PR4),
+the feed render, the **log → library** round-trip, edit, delete (book kept), the
+ownership 404, the account count, and the detail page's no-API-key path. 86 tests total.
+
+---
+
+## Roadmap (documented as each PR lands)
 - **PR7 — Docker/deploy:** multi-stage Dockerfile, Azure App Service F1 Linux,
   startup migration.

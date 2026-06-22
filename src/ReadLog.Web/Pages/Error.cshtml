@@ -1,17 +1,25 @@
 @page
 @model ErrorModel
 @{
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = Model.StatusCodeValue == 404 ? "Page not found" : "Error";
 }
 
-<h1 class="text-danger">Something went wrong.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
-
-@if (Model.ShowRequestId)
+@if (Model.StatusCodeValue == 404)
 {
-    <p>
-        <strong>Request ID:</strong> <code>@Model.RequestId</code>
-    </p>
+    <h1 class="text-danger">Page not found</h1>
+    <p>We couldn't find the page you were looking for.</p>
+}
+else
+{
+    <h1 class="text-danger">Something went wrong.</h1>
+    <h2 class="text-danger">An error occurred while processing your request.</h2>
+
+    @if (Model.ShowRequestId)
+    {
+        <p>
+            <strong>Request ID:</strong> <code>@Model.RequestId</code>
+        </p>
+    }
 }
 
 <p>

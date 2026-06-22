@@ -1,0 +1,38 @@
+@page
+@using ReadLog.Web.Models
+@model AccountModel
+@{
+    ViewData["Title"] = "Account";
+}
+
+<div class="rl-narrow">
+    <h1 class="rl-page-title">Account</h1>
+
+    <div class="card mb-3"><div class="card-body d-flex align-items-center gap-3">
+        <div class="rl-avatar">@Model.Initial</div>
+        <div>
+            @if (!string.IsNullOrEmpty(Model.DisplayName))
+            {
+                <div class="h6 mb-0">@Model.DisplayName</div>
+            }
+            <div class="text-muted small">@Model.Email</div>
+        </div>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+        <h2 class="h6">Reading stats</h2>
+        <div class="display-5 fw-bold">@Model.Stats.TotalBooks</div>
+        <p class="text-muted">@(Model.Stats.TotalBooks == 1 ? "book" : "books") logged</p>
+
+        <div class="d-flex flex-wrap gap-2">
+            @foreach (var format in new[] { Format.Book, Format.Audiobook, Format.Ebook })
+            {
+                var count = Model.Stats.Formats.GetValueOrDefault(format);
+                if (count > 0)
+                {
+                    <span class="badge rl-format-badge">@format.Icon() @count @format.PluralLabel()</span>
+                }
+            }
+        </div>
+    </div></div>
+</div>

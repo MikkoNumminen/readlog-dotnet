@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using ReadLog.Web.Data;
 using ReadLog.Web.Dtos;
 using ReadLog.Web.Models;
@@ -17,6 +18,9 @@ public interface IReadLogService
 
     Task<IReadOnlyList<LibraryEntryDto>> GetMyBooksAsync(string userId, CancellationToken cancellationToken = default);
 
+    /// <returns>The entry, or <c>null</c> if it doesn't exist or isn't owned by the user.</returns>
+    Task<LibraryEntryDto?> GetEntryAsync(string userId, int entryId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<LibraryEntryDto>> CheckIfReadAsync(string userId, string query, CancellationToken cancellationToken = default);
 
     /// <returns><c>false</c> if the entry doesn't exist or isn't owned by the user (treat as 404).</returns>
@@ -33,13 +37,16 @@ public interface IReadLogService
 public class ReadLogService : IReadLogService
 {
     private const int PublicFeedSize = 20;
+    private const string PublicFeedCacheKey = "public-feed";
 
     private readonly ApplicationDbContext _db;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<ReadLogService> _logger;
 
-    public ReadLogService(ApplicationDbContext db, ILogger<ReadLogService> logger)
+    public ReadLogService(ApplicationDbContext db, IMemoryCache cache, ILogger<ReadLogService> logger)
     {
         _db = db;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -57,7 +64,17 @@ public class ReadLogService : IReadLogService
         });
 
         await _db.SaveChangesAsync(cancellationToken);
+        _cache.Remove(PublicFeedCacheKey); // the public feed changed
     }
+
+    public async Task<LibraryEntryDto?> GetEntryAsync(
+        string userId, int entryId, CancellationToken cancellationToken = default) =>
+        await _db.ReadEntries
+            .Where(e => e.Id == entryId && e.UserId == userId)
+            .Select(e => new LibraryEntryDto(
+                e.Id, e.Format, e.FinishedAt, e.Rating,
+                new BookSummaryDto(e.Book.Title, e.Book.Author, e.Book.CoverUrl)))
+            .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<IReadOnlyList<LibraryEntryDto>> GetMyBooksAsync(
         string userId, CancellationToken cancellationToken = default) =>
@@ -113,6 +130,7 @@ public class ReadLogService : IReadLogService
         entry.Rating = request.Rating; // null clears, 0 is a real rating
 
         await _db.SaveChangesAsync(cancellationToken);
+        _cache.Remove(PublicFeedCacheKey);
         return true;
     }
 
@@ -128,6 +146,7 @@ public class ReadLogService : IReadLogService
 
         _db.ReadEntries.Remove(entry); // the shared Book row is left intact
         await _db.SaveChangesAsync(cancellationToken);
+        _cache.Remove(PublicFeedCacheKey);
         return true;
     }
 
@@ -145,13 +164,23 @@ public class ReadLogService : IReadLogService
     }
 
     public async Task<IReadOnlyList<PublicReadDto>> GetRecentPublicReadsAsync(
-        CancellationToken cancellationToken = default) =>
-        await _db.ReadEntries
-            .OrderByDescending(e => e.CreatedAt)
-            .Take(PublicFeedSize)
-            .Select(e => new PublicReadDto(
-                e.Book.Title, e.Book.Author, e.Book.CoverUrl, e.Format, e.CreatedAt, e.Rating))
-            .ToListAsync(cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // The feed is a global hot read; cache it briefly and evict on any write
+        // (the mutations above call _cache.Remove) — the .NET take on updateTag.
+        var feed = await _cache.GetOrCreateAsync(PublicFeedCacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60);
+            return await _db.ReadEntries
+                .OrderByDescending(e => e.CreatedAt)
+                .Take(PublicFeedSize)
+                .Select(e => new PublicReadDto(
+                    e.Book.Title, e.Book.Author, e.Book.CoverUrl, e.Format, e.CreatedAt, e.Rating))
+                .ToListAsync(cancellationToken);
+        });
+
+        return feed ?? [];
+    }
 
     /// <summary>Escapes LIKE metacharacters so a search term is matched literally.</summary>
     private static string EscapeLike(string value) =>

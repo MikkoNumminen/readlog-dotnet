@@ -1,14 +1,50 @@
 @page
+@using ReadLog.Web.Models
 @model IndexModel
 @{
-    ViewData["Title"] = "Home";
+    ViewData["Title"] = "Recently Read";
 }
 
-<div class="rl-hero">
-    <h1 class="display-4">📚 ReadLog</h1>
-    <p class="lead">Track the books and audiobooks you&#39;ve read.</p>
-    <p class="text-muted">
-        Search across Open Library and Google Books, log what you finish with a
-        format and rating, and browse your personal library.
-    </p>
+<div class="rl-narrow">
+    <h1 class="rl-page-title">Recently Read</h1>
+    <p class="text-muted mb-4">See what people are reading.</p>
+
+    @if (Model.RecentReads.Count == 0)
+    {
+        <p class="text-muted text-center mt-5">No books logged yet. Be the first!</p>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var read in Model.RecentReads)
+            {
+                <a class="card rl-feed-card text-decoration-none text-reset"
+                   asp-page="/Book" asp-route-title="@read.Title" asp-route-author="@read.Author"
+                   asp-route-cover="@read.CoverUrl">
+                    <div class="d-flex">
+                        @if (!string.IsNullOrEmpty(read.CoverUrl))
+                        {
+                            <img class="rl-cover rl-cover-md" src="@read.CoverUrl" alt="@read.Title" loading="lazy" />
+                        }
+                        else
+                        {
+                            <div class="rl-cover rl-cover-md rl-cover-placeholder">📖</div>
+                        }
+                        <div class="card-body">
+                            <h2 class="h6 mb-1">@read.Title</h2>
+                            @if (!string.IsNullOrEmpty(read.Author))
+                            {
+                                <p class="text-muted small mb-2">@read.Author</p>
+                            }
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge rl-format-badge">@read.Format.Icon() @read.Format.Label()</span>
+                                <span class="text-muted small">@read.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")</span>
+                            </div>
+                            <div class="mt-1"><partial name="_Stars" model="read.Rating" /></div>
+                        </div>
+                    </div>
+                </a>
+            }
+        </div>
+    }
 </div>

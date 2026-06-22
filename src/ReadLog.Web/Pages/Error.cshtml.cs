@@ -12,8 +12,12 @@ public class ErrorModel : PageModel
 
     public bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
 
-    public void OnGet()
+    /// <summary>Set when the page is re-executed for a status code (e.g. 404).</summary>
+    public int? StatusCodeValue { get; set; }
+
+    public void OnGet(int? code = null)
     {
+        StatusCodeValue = code;
         RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier;
     }
 }

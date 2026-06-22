@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using ReadLog.Tests.Infrastructure;
 using ReadLog.Web.Data;
@@ -12,7 +13,7 @@ namespace ReadLog.Tests.Services;
 public class ReadLogServiceTests
 {
     private static ReadLogService Service(ApplicationDbContext db) =>
-        new(db, NullLogger<ReadLogService>.Instance);
+        new(db, new MemoryCache(new MemoryCacheOptions()), NullLogger<ReadLogService>.Instance);
 
     private static async Task<string> SeedUserAsync(ApplicationDbContext db, string email)
     {

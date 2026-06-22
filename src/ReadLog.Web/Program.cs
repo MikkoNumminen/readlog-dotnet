@@ -79,6 +79,9 @@ builder.Services.AddScoped<IBookDetailsService, BookDetailsService>();
 // The reading-log domain service (logging, library, stats, public feed).
 builder.Services.AddScoped<IReadLogService, ReadLogService>();
 
+// Sanitises the (untrusted) Google Books description HTML before it's rendered.
+builder.Services.AddSingleton<Ganss.Xss.IHtmlSanitizer>(_ => new Ganss.Xss.HtmlSanitizer());
+
 var app = builder.Build();
 
 // Apply pending EF Core migrations at startup so a clean database just works.
@@ -94,6 +97,9 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
+
+// Render the friendly Error page for status codes too (e.g. 404).
+app.UseStatusCodePagesWithReExecute("/Error", "?code={0}");
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
