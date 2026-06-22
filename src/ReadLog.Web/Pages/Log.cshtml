@@ -1,0 +1,131 @@
+@page
+@using ReadLog.Web.Models
+@model LogModel
+@{
+    ViewData["Title"] = "Log a book";
+}
+
+<div class="rl-narrow">
+    <h1 class="rl-page-title">Log a book</h1>
+
+    @if (!Model.HasSelection)
+    {
+        <form method="get" class="mb-3">
+            <div class="mb-2">
+                <label for="Title" class="form-label">Book title</label>
+                <input id="Title" name="Title" value="@Model.Title" class="form-control" autofocus />
+            </div>
+            <div class="mb-2">
+                <label for="Author" class="form-label">Author (optional)</label>
+                <input id="Author" name="Author" value="@Model.Author" class="form-control form-control-sm" />
+            </div>
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+
+        @if (Model.Searched && Model.Results.Count == 0)
+        {
+            <p class="text-muted">No books found.</p>
+            @if (!string.IsNullOrWhiteSpace(Model.Title))
+            {
+                <a class="btn btn-outline-primary"
+                   asp-page="/Log" asp-route-olid="@Model.ManualOpenLibraryId"
+                   asp-route-selTitle="@Model.Title?.Trim()" asp-route-selAuthor="@Model.Author?.Trim()">
+                    Add &quot;@Model.Title.Trim()&quot; manually
+                </a>
+            }
+        }
+        else if (Model.Results.Count > 0)
+        {
+            <div class="list-group">
+                @foreach (var book in Model.Results)
+                {
+                    <a class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                       asp-page="/Log" asp-route-olid="@book.OpenLibraryId"
+                       asp-route-selTitle="@book.Title" asp-route-selAuthor="@book.Author"
+                       asp-route-cover="@book.CoverUrl" asp-route-pages="@book.PageCount"
+                       asp-route-year="@book.FirstPublishYear">
+                        @if (!string.IsNullOrEmpty(book.CoverUrl))
+                        {
+                            <img class="rl-cover rl-cover-sm" src="@book.CoverUrl" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <div class="rl-cover rl-cover-sm rl-cover-placeholder" aria-hidden="true">📖</div>
+                        }
+                        <span>
+                            <span class="fw-semibold">@(string.IsNullOrEmpty(book.Subtitle) ? book.Title : $"{book.Title} — {book.Subtitle}")</span>
+                            <span class="d-block text-muted small">@string.Join(" · ", new[] { book.Author, book.FirstPublishYear?.ToString() }.Where(s => !string.IsNullOrEmpty(s)))</span>
+                        </span>
+                    </a>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        <form method="post">
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+            <input type="hidden" asp-for="Input.OpenLibraryId" />
+            <input type="hidden" asp-for="Input.CoverUrl" />
+            <input type="hidden" asp-for="Input.PageCount" />
+            <input type="hidden" asp-for="Input.FirstPublishYear" />
+
+            <div class="card mb-3"><div class="card-body d-flex gap-3">
+                @if (!string.IsNullOrEmpty(Model.Input.CoverUrl))
+                {
+                    <img class="rl-cover rl-cover-md" src="@Model.Input.CoverUrl" alt="" />
+                }
+                <div class="flex-grow-1">
+                    <div class="mb-2">
+                        <label asp-for="Input.Title" class="form-label">Title</label>
+                        <input asp-for="Input.Title" class="form-control" />
+                        <span asp-validation-for="Input.Title" class="text-danger"></span>
+                    </div>
+                    <div class="mb-1">
+                        <label asp-for="Input.Author" class="form-label">Author</label>
+                        <input asp-for="Input.Author" class="form-control form-control-sm" />
+                    </div>
+                    <a class="small" asp-page="/Log">Change book</a>
+                </div>
+            </div></div>
+
+            <fieldset class="mb-3">
+                <legend class="form-label">Format</legend>
+                <div class="btn-group">
+                    @foreach (var format in new[] { Format.Book, Format.Audiobook, Format.Ebook })
+                    {
+                        <input type="radio" class="btn-check" name="Input.Format" id="fmt-@format"
+                               value="@format" autocomplete="off" checked="@(Model.Input.Format == format)" />
+                        <label class="btn btn-outline-primary" for="fmt-@format">@format.Icon() @format.Label()</label>
+                    }
+                </div>
+            </fieldset>
+
+            <div class="mb-3">
+                <label asp-for="Input.FinishedAt" class="form-label"></label>
+                <input asp-for="Input.FinishedAt" type="date" class="form-control" />
+                <span asp-validation-for="Input.FinishedAt" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Input.Rating" class="form-label">Your rating</label>
+                <select asp-for="Input.Rating" class="form-select">
+                    <option value="">No rating</option>
+                    <option value="1">★ 1</option>
+                    <option value="2">★★ 2</option>
+                    <option value="3">★★★ 3</option>
+                    <option value="4">★★★★ 4</option>
+                    <option value="5">★★★★★ 5</option>
+                </select>
+                <span asp-validation-for="Input.Rating" class="text-danger"></span>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Save to library</button>
+        </form>
+    }
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

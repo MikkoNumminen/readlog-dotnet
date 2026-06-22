@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using ReadLog.Web.Auth;
@@ -52,6 +54,19 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
     {
         options.ClientId = googleClientId;
         options.ClientSecret = googleClientSecret;
+
+        // Capture the Google profile photo so the account page can show it.
+        options.Events.OnCreatingTicket = context =>
+        {
+            if (context.Identity is not null
+                && context.User.TryGetProperty("picture", out var picture)
+                && picture.ValueKind == JsonValueKind.String)
+            {
+                context.Identity.AddClaim(new Claim("picture", picture.GetString()!));
+            }
+
+            return Task.CompletedTask;
+        };
     });
 }
 
@@ -79,6 +94,9 @@ builder.Services.AddScoped<IBookDetailsService, BookDetailsService>();
 // The reading-log domain service (logging, library, stats, public feed).
 builder.Services.AddScoped<IReadLogService, ReadLogService>();
 
+// Sanitises the (untrusted) Google Books description HTML before it's rendered.
+builder.Services.AddSingleton(BookDescriptionSanitizer.Create());
+
 var app = builder.Build();
 
 // Apply pending EF Core migrations at startup so a clean database just works.
@@ -94,6 +112,9 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
+
+// Render the friendly Error page for status codes too (e.g. 404).
+app.UseStatusCodePagesWithReExecute("/Error", "?code={0}");
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();

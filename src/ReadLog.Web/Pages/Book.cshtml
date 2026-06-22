@@ -1,0 +1,70 @@
+@page
+@model BookModel
+@{
+    ViewData["Title"] = Model.Title;
+}
+
+<div class="rl-narrow">
+    <p><a asp-page="/Index">&larr; Back to feed</a></p>
+    <h1 class="rl-page-title">@Model.Title</h1>
+
+    @if (Model.Details is null)
+    {
+        <p class="text-muted">No details available for this book.</p>
+    }
+    else
+    {
+        var d = Model.Details;
+        var cover = !string.IsNullOrEmpty(d.CoverUrl) ? d.CoverUrl : Model.FallbackCoverUrl;
+        <div class="d-flex gap-3 mb-3 flex-wrap">
+            @if (!string.IsNullOrEmpty(cover))
+            {
+                <img class="rl-cover rl-cover-lg" src="@cover" alt="" />
+            }
+            <div>
+                @if (d.Authors.Count > 0)
+                {
+                    <p class="mb-1"><strong>@string.Join(", ", d.Authors)</strong></p>
+                }
+                @if (!string.IsNullOrEmpty(d.PublishedDate))
+                {
+                    <p class="text-muted small mb-1">Published: @d.PublishedDate</p>
+                }
+                @if (!string.IsNullOrEmpty(d.Publisher))
+                {
+                    <p class="text-muted small mb-1">Publisher: @d.Publisher</p>
+                }
+                @if (d.PageCount is { } pageCount)
+                {
+                    <p class="text-muted small mb-1">@pageCount pages</p>
+                }
+                @if (!string.IsNullOrEmpty(d.Language))
+                {
+                    <p class="text-muted small mb-1">Language: @d.Language.ToUpperInvariant()</p>
+                }
+            </div>
+        </div>
+
+        @if (d.Categories.Count > 0)
+        {
+            <div class="mb-3 d-flex flex-wrap gap-1">
+                @foreach (var category in d.Categories)
+                {
+                    <span class="badge rl-format-badge">@category</span>
+                }
+            </div>
+        }
+
+        @if (Model.SafeDescriptionHtml is not null)
+        {
+            <div class="rl-description">@Html.Raw(Model.SafeDescriptionHtml)</div>
+        }
+
+        @if (!string.IsNullOrEmpty(d.InfoLink))
+        {
+            <p class="mt-3">
+                <a href="@d.InfoLink" target="_blank" rel="noopener noreferrer">More on Google Books &#8599;</a>
+            </p>
+        }
+    }
+</div>

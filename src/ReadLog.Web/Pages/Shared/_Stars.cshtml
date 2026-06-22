@@ -1,0 +1,13 @@
+@model int?
+@{
+    var rating = Model;
+}
+@if (rating.HasValue)
+{
+    <span class="rl-stars" title="@rating / 5" aria-label="@rating out of 5 stars">
+        @for (var i = 1; i <= 5; i++)
+        {
+            <span class="rl-star@(i <= rating ? " rl-star-filled" : "")">@(i <= rating ? "★" : "☆")</span>
+        }
+    </span>
+}
