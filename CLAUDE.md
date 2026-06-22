@@ -185,14 +185,21 @@ In dev: `cd src/ReadLog.Web && dotnet user-secrets set "GoogleBooks:ApiKey" "<ke
 `build --configuration Release --no-restore` → `test --configuration Release
 --no-build --collect:"XPlat Code Coverage"`.
 
+`.github/workflows/deploy.yml`: **manual-only** (`workflow_dispatch`) — builds the
+image, pushes to ghcr.io, deploys the container to App Service via OIDC. The `deploy`
+job runs in a `production` GitHub Environment (add a required reviewer to gate it).
+Setup + caveats live in **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
 ## Status / deploy
 
 Port is **feature-complete and merged to `master`** (7 PRs, 95 tests, 0 warnings,
 CI green). The **only remaining task is deployment** to **Azure App Service F1
-Linux** — and it is **not yet authorized**. The app is deploy-ready: multi-stage
-`Dockerfile` (`aspnet:8.0`, non-root, port **8080**), SQLite at `/home/data`,
-migrations on startup, `UseForwardedHeaders` first in the pipeline. To deploy the
-container, set `WEBSITES_PORT=8080`, `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`,
+Linux** — and the act of deploying is **not yet authorized**. The app is deploy-ready:
+multi-stage `Dockerfile` (`aspnet:8.0`, non-root, port **8080**), SQLite at
+`/home/data`, migrations on startup, `UseForwardedHeaders` first in the pipeline. A
+manual, gated deploy pipeline now exists (`deploy.yml` + **[docs/DEPLOY.md](docs/DEPLOY.md)**);
+the one-time Azure bootstrap and the *Run workflow* click are still owner actions. To
+deploy the container, set `WEBSITES_PORT=8080`, `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`,
 `ConnectionStrings__Default=Data Source=/home/data/readlog.db`, enable **HTTPS
 Only**. (The Docker image build hasn't been run in-environment — no daemon — but the
 `dotnet publish` it depends on is verified.)
@@ -204,4 +211,6 @@ Only**. (The Docker image build hasn't been run in-environment — no daemon —
   rationale, per PR. Read before changing an architectural choice.
 - **[docs/SOURCE-MAP.md](docs/SOURCE-MAP.md)** — the original Next.js app's behaviour
   mapped to its C# counterpart. Read before touching feature parity.
+- **[docs/DEPLOY.md](docs/DEPLOY.md)** — the deployment runbook: CI/CD pipeline,
+  one-time Azure bootstrap, OIDC setup, free-tier caveats. Read before deploying.
 - **[README.md](README.md)** — human-facing setup, configuration, deployment.
