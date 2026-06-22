@@ -54,21 +54,80 @@ dotnet dev-certs https --trust
 dotnet test
 ```
 
+## Configuration
+
+Settings are bound from `appsettings.json` + environment variables (and user-secrets
+in development). Nothing secret is committed.
+
+| Setting | Purpose |
+| --- | --- |
+| `ConnectionStrings:Default` | SQLite connection string (default `Data Source=readlog.db`) |
+| `GoogleBooks:ApiKey` | enables Google Books search/details (absent ⇒ Open Library only) |
+| `Authentication:Google:ClientId` / `ClientSecret` | enables the optional "Sign in with Google" button |
+
+In development, put secrets in user-secrets rather than the file:
+
+```bash
+cd src/ReadLog.Web
+dotnet user-secrets set "GoogleBooks:ApiKey" "<key>"
+dotnet user-secrets set "Authentication:Google:ClientId" "<id>"
+dotnet user-secrets set "Authentication:Google:ClientSecret" "<secret>"
+```
+
+## Deployment
+
+### Docker
+
+A multi-stage [`Dockerfile`](Dockerfile) builds on the SDK image and runs on
+`mcr.microsoft.com/dotnet/aspnet:8.0` as a non-root user, listening on port `8080`:
+
+```bash
+docker build -t readlog .
+docker run -p 8080:8080 -v readlog-data:/home/data readlog
+# open http://localhost:8080
+```
+
+EF Core migrations are applied automatically on startup, so the SQLite database is
+created on first run. The volume keeps it across container restarts.
+
+### Azure App Service (F1 Linux)
+
+The app is sized for the free **F1 Linux** tier (SQLite, no Postgres → no cold-start
+database). Deploy the container, then set:
+
+| App setting | Value |
+| --- | --- |
+| `WEBSITES_PORT` | `8080` |
+| `WEBSITES_ENABLE_APP_SERVICE_STORAGE` | `true` (persist `/home`, where the SQLite file lives) |
+| `ConnectionStrings__Default` | `Data Source=/home/data/readlog.db` (the Dockerfile default) |
+| `GoogleBooks__ApiKey`, `Authentication__Google__*` | as needed |
+
+Enable **HTTPS Only** on the App Service; the app honours `X-Forwarded-Proto` via
+forwarded-headers middleware so auth cookies and links use the right scheme behind the
+platform's TLS-terminating proxy.
+
+> Note: `dotnet publish` and a Production run of the published app are verified locally;
+> the Docker image build itself was not run in this environment (no Docker daemon available).
+
 ## Project structure
 
 ```
 ReadLog.sln
 Directory.Build.props        # solution-wide build settings (nullable, langversion, analysis)
 global.json                  # pinned .NET SDK
+Dockerfile / .dockerignore   # container build (aspnet:8.0 runtime, non-root)
 docs/SOURCE-MAP.md           # behavioural map of the original Next.js app
 PORTING-NOTES.md             # every significant .NET decision, with rationale
 src/ReadLog.Web/             # the ASP.NET Core Razor Pages application
-tests/ReadLog.Tests/         # xUnit tests
+  Models/  Data/  Dtos/  Options/  Validation/  Auth/  Services/  Pages/
+tests/ReadLog.Tests/         # xUnit tests (unit + integration)
 .github/workflows/ci.yml     # build + test on every push / PR
 ```
 
 ## Status
 
-This repository is being built up in reviewed, PR-sized chunks
-(scaffold → data layer → integrations → auth → CRUD → UI → Docker/deploy). See
-the open/merged pull requests for progress.
+The port is feature-complete: every feature of the original ReadLog is implemented,
+the app builds and runs (`dotnet run`), EF Core migrations apply from a clean database,
+the Dockerfile is in place, and the test suite is green. It was built in reviewed,
+PR-sized chunks (scaffold → data layer → integrations → auth → CRUD → UI →
+Docker/deploy); see the merged pull requests for the history.

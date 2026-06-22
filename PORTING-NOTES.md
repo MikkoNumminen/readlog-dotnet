@@ -503,6 +503,56 @@ ownership 404, the account count, and the detail page's no-API-key path. 86 test
 
 ---
 
-## Roadmap (documented as each PR lands)
-- **PR7 — Docker/deploy:** multi-stage Dockerfile, Azure App Service F1 Linux,
-  startup migration.
+## PR7 — Docker, deploy & finalize
+
+### The Dockerfile
+
+A **multi-stage** build: the `sdk:8.0` stage restores (project files copied first so the
+restore layer caches) and `dotnet publish`es the web project framework-dependent
+(`/p:UseAppHost=false` — we launch via `dotnet ReadLog.Web.dll`); the
+`aspnet:8.0` runtime stage carries only the published output. It runs as the image's
+**non-root** `$APP_UID` user and listens on **8080** (the .NET 8 image default,
+made explicit). `.dockerignore` keeps `bin`/`obj`/`.git`/`tests`/`docs` out of the
+build context.
+
+### SQLite in a container
+
+The container defaults `ConnectionStrings__Default` to `/home/data/readlog.db` — a
+directory created (and owned by the app user) in the image, which on Azure App Service
+maps onto the persistent `/home` share. Program ensures the database directory exists
+before migrating, so a clean deploy creates the file on first run via the startup
+`Database.Migrate()` — no manual DB step.
+
+### Behind a reverse proxy
+
+Azure App Service terminates TLS and forwards plain HTTP to the container.
+`UseForwardedHeaders` (X-Forwarded-For/Proto, with the known-proxy lists cleared because
+the platform is the only ingress) is the first middleware, so HTTPS redirection, auth
+cookies and generated links use the original `https` scheme.
+
+### Why this target (vs the original's Vercel + Neon)
+
+The original deploys to Vercel with a Neon serverless Postgres. The brief's target is
+**Azure App Service F1 Linux** with **SQLite** — chosen specifically to dodge the
+Azure SQL / serverless-Postgres **cold-start** problem on a free tier: a local SQLite
+file has no connection to wake up. The trade-off (documented for the interview): SQLite
+on a single F1 instance means no horizontal scale and the DB lives with the app — fine
+for a personal reading log, and the EF Core data layer would move to Postgres/SQL Server
+by swapping the provider + connection string if that changed.
+
+### Verification
+
+`dotnet publish` and a **Production run of the published app** are verified locally
+(home feed serves; a protected page 302-redirects to `/signin`; no HTTPS-redirect loop).
+The Docker image build itself was **not** run here — this environment has no Docker
+daemon — but the publish step it depends on is green.
+
+---
+
+## Done
+
+Every chunk has landed: scaffold → data layer → integrations → auth → CRUD → UI →
+Docker/deploy. The result is an idiomatic ASP.NET Core application — DI throughout,
+async I/O, EF Core migrations, DTOs + DataAnnotations, `IOptions`, `ILogger`,
+nullable-as-error — that reproduces every ReadLog feature without transliterating the
+TypeScript.

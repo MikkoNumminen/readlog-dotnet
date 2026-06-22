@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using ReadLog.Web.Auth;
 using ReadLog.Web.Data;
@@ -13,6 +15,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 // --- Services -------------------------------------------------------------
 builder.Services.AddRazorPages();
+
+// Behind a TLS-terminating reverse proxy (Azure App Service), honour the original
+// scheme/host so HTTPS redirection and auth cookies behave. The platform is the only
+// ingress, so all proxies are trusted (KnownNetworks/Proxies cleared).
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
@@ -99,7 +111,15 @@ builder.Services.AddSingleton(BookDescriptionSanitizer.Create());
 
 var app = builder.Build();
 
-// Apply pending EF Core migrations at startup so a clean database just works.
+// Make sure the SQLite database directory exists (e.g. /home/data on Azure App
+// Service) before migrating, then apply pending migrations so a clean DB just works.
+var dbDataSource = new SqliteConnectionStringBuilder(connectionString).DataSource;
+var dbDirectory = Path.GetDirectoryName(Path.GetFullPath(dbDataSource));
+if (!string.IsNullOrEmpty(dbDirectory))
+{
+    Directory.CreateDirectory(dbDirectory);
+}
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -107,6 +127,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 // --- HTTP pipeline --------------------------------------------------------
+app.UseForwardedHeaders();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");

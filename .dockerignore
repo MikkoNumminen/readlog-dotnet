@@ -1,0 +1,25 @@
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+publish/
+
+# Version control & IDE
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+
+# Tooling / tests / docs — not needed to build the image
+tests/
+docs/
+*.md
+.editorconfig
+.gitattributes
+.gitignore
+
+# Local SQLite databases
+*.db
+*.db-shm
+*.db-wal
