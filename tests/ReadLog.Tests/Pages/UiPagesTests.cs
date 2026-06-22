@@ -136,7 +136,59 @@ public class UiPagesTests
 
         Assert.Contains("Count Reader", html);
         Assert.Contains("Reading stats", html);
-        Assert.Contains("1", html); // one book logged
+        Assert.Contains("book logged", html);   // singular total label for exactly one
+        Assert.Contains("1 Books", html);        // the per-format chip
+    }
+
+    [Fact]
+    public async Task Logging_the_same_book_on_the_same_date_twice_shows_a_conflict_message()
+    {
+        using var factory = new ReadLogAppFactory();
+        var client = factory.CreateClient();
+        await client.RegisterAsync("dup@example.com");
+        await LogBookAsync(client, "manual:dup", "Repeat Book");
+
+        var response = await client.PostFormAsync("/log?olid=manual:dup&selTitle=Repeat%20Book",
+            new Dictionary<string, string>
+            {
+                ["Input.OpenLibraryId"] = "manual:dup",
+                ["Input.Title"] = "Repeat Book",
+                ["Input.Format"] = "Book",
+                ["Input.FinishedAt"] = Today,
+            });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode); // re-rendered, not redirected
+        Assert.Contains("already logged", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Library_search_reports_matches_and_misses()
+    {
+        using var factory = new ReadLogAppFactory();
+        var client = factory.CreateClient();
+        await client.RegisterAsync("searcher@example.com");
+        await LogBookAsync(client, "manual:s1", "Searchable Saga");
+
+        var match = await client.GetStringAsync("/library?q=saga");
+        Assert.Contains("Yes! Found", match);
+        Assert.Contains("Searchable Saga", match);
+
+        var miss = await client.GetStringAsync("/library?q=nothinghere");
+        Assert.Contains("Not in your library", miss);
+    }
+
+    [Fact]
+    public async Task Library_list_view_renders()
+    {
+        using var factory = new ReadLogAppFactory();
+        var client = factory.CreateClient();
+        await client.RegisterAsync("lister@example.com");
+        await LogBookAsync(client, "manual:l1", "Listed Book");
+
+        var html = await client.GetStringAsync("/library?view=list");
+
+        Assert.Contains("Listed Book", html);
+        Assert.Contains("Edit", html); // the list view's per-row edit link
     }
 
     [Fact]

@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.EntityFrameworkCore;
 using ReadLog.Web.Auth;
 using ReadLog.Web.Dtos;
 using ReadLog.Web.Models;
@@ -85,9 +84,8 @@ public class LogModel : PageModel
         {
             await _readLog.LogBookAsync(User.GetUserId(), Input, cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DuplicateReadEntryException)
         {
-            // The unique (user, book, finished-on) index rejected a duplicate.
             ModelState.AddModelError(string.Empty, "You've already logged this book with that finished date.");
             return Page();
         }

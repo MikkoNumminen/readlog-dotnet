@@ -24,11 +24,11 @@
                     <div class="d-flex">
                         @if (!string.IsNullOrEmpty(read.CoverUrl))
                         {
-                            <img class="rl-cover rl-cover-md" src="@read.CoverUrl" alt="@read.Title" loading="lazy" />
+                            <img class="rl-cover rl-cover-md" src="@read.CoverUrl" alt="" loading="lazy" />
                         }
                         else
                         {
-                            <div class="rl-cover rl-cover-md rl-cover-placeholder">📖</div>
+                            <div class="rl-cover rl-cover-md rl-cover-placeholder" aria-hidden="true">📖</div>
                         }
                         <div class="card-body">
                             <h2 class="h6 mb-1">@read.Title</h2>

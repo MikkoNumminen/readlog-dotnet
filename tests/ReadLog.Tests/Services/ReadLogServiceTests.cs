@@ -391,20 +391,6 @@ public class ReadLogServiceTests
     }
 
     [Fact]
-    public async Task LogBookAsync_throws_when_the_same_book_is_logged_on_the_same_date_twice()
-    {
-        using var sqlite = new SqliteTestDatabase();
-        using var db = sqlite.CreateContext();
-        var userId = await SeedUserAsync(db, "me@example.com");
-        var svc = Service(db);
-        var date = new DateOnly(2024, 1, 1);
-        await svc.LogBookAsync(userId, Request("ol:1", "Dune", date));
-
-        // The page is responsible for turning this into a friendly "already logged" message.
-        await Assert.ThrowsAsync<DbUpdateException>(() => svc.LogBookAsync(userId, Request("ol:1", "Dune", date)));
-    }
-
-    [Fact]
     public async Task CheckIfReadAsync_finds_a_title_containing_a_literal_percent()
     {
         using var sqlite = new SqliteTestDatabase();
@@ -429,6 +415,57 @@ public class ReadLogServiceTests
 
         Assert.Single(await svc.CheckIfReadAsync(userId, "A_B")); // literal underscore matches
         Assert.Empty(await svc.CheckIfReadAsync(userId, "AxB"));  // underscore is not a wildcard
+    }
+
+    [Fact]
+    public async Task GetRecentPublicReadsAsync_caches_until_a_write_evicts_it()
+    {
+        using var sqlite = new SqliteTestDatabase();
+        var cache = new MemoryCache(new MemoryCacheOptions());
+
+        string userId;
+        using (var seed = sqlite.CreateContext())
+        {
+            userId = await SeedUserAsync(seed, "feed@example.com");
+        }
+
+        // One service instance sharing one cache, mirroring the app's singleton cache.
+        using var serviceDb = sqlite.CreateContext();
+        var service = new ReadLogService(serviceDb, cache, NullLogger<ReadLogService>.Instance);
+
+        await service.LogBookAsync(userId, Request("ol:1", "First", new DateOnly(2024, 1, 1)));
+        Assert.Single(await service.GetRecentPublicReadsAsync()); // populates the cache
+
+        // Insert another entry out of band (a second context, so no eviction happens).
+        using (var outOfBand = sqlite.CreateContext())
+        {
+            var book = new Book { Title = "Sneaked In", OpenLibraryId = "ol:2" };
+            outOfBand.Books.Add(book);
+            await outOfBand.SaveChangesAsync();
+            outOfBand.ReadEntries.Add(new ReadEntry { UserId = userId, BookId = book.Id, FinishedAt = new DateOnly(2024, 2, 1) });
+            await outOfBand.SaveChangesAsync();
+        }
+
+        // Still served from cache — the out-of-band row is invisible.
+        Assert.Single(await service.GetRecentPublicReadsAsync());
+
+        // A write through the service evicts the cache, so the next read sees everything.
+        await service.LogBookAsync(userId, Request("ol:3", "Third", new DateOnly(2024, 3, 1)));
+        Assert.Equal(3, (await service.GetRecentPublicReadsAsync()).Count);
+    }
+
+    [Fact]
+    public async Task LogBookAsync_throws_DuplicateReadEntryException_for_a_same_date_relog()
+    {
+        using var sqlite = new SqliteTestDatabase();
+        using var db = sqlite.CreateContext();
+        var userId = await SeedUserAsync(db, "dup@example.com");
+        var svc = Service(db);
+        var date = new DateOnly(2024, 1, 1);
+        await svc.LogBookAsync(userId, Request("ol:1", "Dune", date));
+
+        await Assert.ThrowsAsync<DuplicateReadEntryException>(
+            () => svc.LogBookAsync(userId, Request("ol:1", "Dune", date)));
     }
 
     [Fact]

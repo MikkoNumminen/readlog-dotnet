@@ -31,7 +31,11 @@
                     <div class="card"><div class="card-body d-flex align-items-center gap-2 py-2">
                         @if (!string.IsNullOrEmpty(result.Book.CoverUrl))
                         {
-                            <img class="rl-cover rl-cover-sm" src="@result.Book.CoverUrl" alt="@result.Book.Title" loading="lazy" />
+                            <img class="rl-cover rl-cover-sm" src="@result.Book.CoverUrl" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <div class="rl-cover rl-cover-sm rl-cover-placeholder" aria-hidden="true">📖</div>
                         }
                         <div>
                             <div class="fw-semibold">@result.Book.Title</div>
@@ -67,11 +71,11 @@
                     <div class="card"><div class="card-body d-flex align-items-center gap-2 py-2">
                         @if (!string.IsNullOrEmpty(entry.Book.CoverUrl))
                         {
-                            <img class="rl-cover rl-cover-sm" src="@entry.Book.CoverUrl" alt="@entry.Book.Title" loading="lazy" />
+                            <img class="rl-cover rl-cover-sm" src="@entry.Book.CoverUrl" alt="" loading="lazy" />
                         }
                         else
                         {
-                            <div class="rl-cover rl-cover-sm rl-cover-placeholder">📖</div>
+                            <div class="rl-cover rl-cover-sm rl-cover-placeholder" aria-hidden="true">📖</div>
                         }
                         <div class="flex-grow-1 min-w-0">
                             <div class="fw-semibold text-truncate">@entry.Book.Title</div>
@@ -97,16 +101,16 @@
                         <a class="text-decoration-none text-reset rl-grid-item" asp-page="/Library/Edit" asp-route-id="@entry.Id">
                             @if (!string.IsNullOrEmpty(entry.Book.CoverUrl))
                             {
-                                <img class="rl-cover rl-cover-grid" src="@entry.Book.CoverUrl" alt="@entry.Book.Title" loading="lazy" />
+                                <img class="rl-cover rl-cover-grid" src="@entry.Book.CoverUrl" alt="" loading="lazy" />
                             }
                             else
                             {
-                                <div class="rl-cover rl-cover-grid rl-cover-placeholder">📖</div>
+                                <div class="rl-cover rl-cover-grid rl-cover-placeholder" aria-hidden="true">📖</div>
                             }
                             <div class="small fw-semibold mt-1 rl-clamp-2">@entry.Book.Title</div>
                             @if (!string.IsNullOrEmpty(entry.Book.Author))
                             {
-                                <div class="text-muted text-truncate" style="font-size:.75rem">@entry.Book.Author</div>
+                                <div class="text-muted text-truncate rl-grid-author">@entry.Book.Author</div>
                             }
                             <partial name="_Stars" model="entry.Rating" />
                         </a>

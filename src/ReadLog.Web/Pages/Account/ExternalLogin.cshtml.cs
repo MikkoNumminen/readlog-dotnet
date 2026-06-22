@@ -75,6 +75,7 @@ public class ExternalLoginModel : PageModel
             UserName = email,
             Email = email,
             Name = info.Principal.FindFirstValue(ClaimTypes.Name),
+            Image = info.Principal.FindFirstValue("picture"),
         };
 
         var createResult = await _userManager.CreateAsync(user);

@@ -440,7 +440,10 @@ idiomatic Razor Pages flow — **GET to read, POST to mutate, redirect after** (
   whose results are rendered server-side, and — once a result's "Select" link is
   followed (the chosen book travels in the query string) — a prefilled log form that
   **POSTs** to create the entry and redirects to the library. The "Add … manually"
-  fallback links to the same form with a generated `manual:{guid}` id.
+  fallback links to the same form with a generated `manual:{guid}` id. A duplicate
+  (same book + finished-on date) surfaces from the service as a domain
+  `DuplicateReadEntryException` (not a raw `DbUpdateException`), which the page maps to
+  a friendly "already logged" message.
 - **Edit/Delete** is a dedicated page (`/library/edit/{id}`) rather than a modal —
   GET shows the form, POST saves or deletes, then redirects. Ownership is enforced by
   the service (a foreign entry → `NotFound()`), and delete is a separate antiforgery
@@ -460,14 +463,20 @@ flash). The port marks the page `[Authorize]`; the cookie middleware issues the
 Read-only ratings render as filled/empty star spans (`_Stars` partial); the log/edit
 forms use a `<select>` (No rating + 1–5) — accessible and JS-free, matching the MUI
 Rating's effective "null or 1–5" behaviour. Formats use emoji + label
-(`FormatDisplay`) in place of MUI icon components.
+(`FormatDisplay`) in place of MUI icon components. The account avatar shows the
+user's Google profile photo when one is present — captured from the provider via the
+Google handler's `OnCreatingTicket` event and stored on `ApplicationUser.Image` —
+falling back to an initial (the only state for a local account).
 
 ### Book detail — and sanitising untrusted HTML
 
 The detail view is a page (`/book`) rather than a modal. Google Books descriptions are
 HTML; the original rendered them with `dangerouslySetInnerHTML` (**unsanitised** — an
 XSS vector). The port runs the description through **HtmlSanitizer** before
-`@Html.Raw`, so only safe markup survives.
+`@Html.Raw`, so only safe markup survives, and additionally drops the `target`
+attribute so an in-description link can't open `target="_blank"` without
+`rel="noopener"` (reverse-tabnabbing). The sanitizer config lives in a small factory
+so it's unit-tested against XSS payloads.
 
 ### Caching the feed (data, not output)
 

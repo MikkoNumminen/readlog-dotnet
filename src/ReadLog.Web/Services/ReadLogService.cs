@@ -54,16 +54,37 @@ public class ReadLogService : IReadLogService
     {
         var book = await GetOrCreateBookAsync(request, cancellationToken);
 
-        _db.ReadEntries.Add(new ReadEntry
+        var entry = new ReadEntry
         {
             UserId = userId,
             Book = book,
             Format = request.Format,
             FinishedAt = request.FinishedAt,
             Rating = request.Rating,
-        });
+        };
+        _db.ReadEntries.Add(entry);
 
-        await _db.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // The unique (user, book, finished-on) index may have rejected a duplicate.
+            // Confirm by re-querying; if it really is a duplicate, surface a domain error,
+            // otherwise re-throw so a genuine failure (e.g. a locked DB) isn't mislabelled.
+            _db.Entry(entry).State = EntityState.Detached;
+            var alreadyLogged = await _db.ReadEntries.AnyAsync(
+                e => e.UserId == userId && e.BookId == book.Id && e.FinishedAt == request.FinishedAt,
+                cancellationToken);
+            if (alreadyLogged)
+            {
+                throw new DuplicateReadEntryException();
+            }
+
+            throw;
+        }
+
         _cache.Remove(PublicFeedCacheKey); // the public feed changed
     }
 
@@ -171,12 +192,16 @@ public class ReadLogService : IReadLogService
         var feed = await _cache.GetOrCreateAsync(PublicFeedCacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60);
+
+            // Don't bake one request's cancellation token into the shared cache entry —
+            // the populating query serves every reader, so it shouldn't be cancellable
+            // by whichever request happened to trigger it.
             return await _db.ReadEntries
                 .OrderByDescending(e => e.CreatedAt)
                 .Take(PublicFeedSize)
                 .Select(e => new PublicReadDto(
                     e.Book.Title, e.Book.Author, e.Book.CoverUrl, e.Format, e.CreatedAt, e.Rating))
-                .ToListAsync(cancellationToken);
+                .ToListAsync(CancellationToken.None);
         });
 
         return feed ?? [];
