@@ -92,6 +92,11 @@ created on first run. The volume keeps it across container restarts.
 
 ### Azure App Service (F1 Linux)
 
+A manual **GitHub Actions deploy pipeline** ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml))
+builds the image, pushes it to GitHub Container Registry, and deploys the container
+to App Service via OIDC. The full runbook — one-time Azure bootstrap, OIDC setup, and
+free-tier caveats — is in **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+
 The app is sized for the free **F1 Linux** tier (SQLite, no Postgres → no cold-start
 database). Deploy the container, then set:
 
@@ -121,7 +126,7 @@ PORTING-NOTES.md             # every significant .NET decision, with rationale
 src/ReadLog.Web/             # the ASP.NET Core Razor Pages application
   Models/  Data/  Dtos/  Options/  Validation/  Auth/  Services/  Pages/
 tests/ReadLog.Tests/         # xUnit tests (unit + integration)
-.github/workflows/ci.yml     # build + test on every push / PR
+.github/workflows/           # ci.yml (build + test) and deploy.yml (manual deploy)
 ```
 
 ## Status
