@@ -142,10 +142,8 @@ public class ReadLogService : IReadLogService
             return false;
         }
 
-        // NOTE: Title edits the shared catalogue Book, so they change every user's entry
-        // for that book — faithful to the original. A per-entry title override would
-        // localise it; deliberately out of scope for the port.
-        entry.Book.Title = request.Title;
+        // The shared catalogue Book is intentionally NOT editable here: a title edit would
+        // mutate the row for every user who logged that book. Only per-user fields change.
         entry.Format = request.Format;
         entry.FinishedAt = request.FinishedAt;
         entry.Rating = request.Rating; // null clears, 0 is a real rating

@@ -33,7 +33,6 @@ public class EditModel : PageModel
         Book = entry.Book;
         Input = new UpdateReadEntryRequest
         {
-            Title = entry.Book.Title,
             Format = entry.Format,
             FinishedAt = entry.FinishedAt,
             Rating = entry.Rating,

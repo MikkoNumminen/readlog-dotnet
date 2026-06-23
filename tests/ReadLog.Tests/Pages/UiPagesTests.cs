@@ -78,7 +78,6 @@ public class UiPagesTests
 
         var response = await client.PostFormAsync($"/library/edit/{id}", new Dictionary<string, string>
         {
-            ["Input.Title"] = "Renamed Title",
             ["Input.Format"] = "Ebook",
             ["Input.FinishedAt"] = Today,
             ["Input.Rating"] = "5",
@@ -87,7 +86,7 @@ public class UiPagesTests
 
         await AssertEntryAsync(factory, e =>
         {
-            Assert.Equal("Renamed Title", e.Book.Title);
+            Assert.Equal("Original Title", e.Book.Title); // shared-catalogue title is not editable
             Assert.Equal(5, e.Rating);
         });
     }

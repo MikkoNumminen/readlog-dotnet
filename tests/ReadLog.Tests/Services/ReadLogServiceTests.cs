@@ -165,7 +165,6 @@ public class ReadLogServiceTests
         {
             updated = await Service(db).UpdateReadEntryAsync(userId, entryId, new UpdateReadEntryRequest
             {
-                Title = "Dune (revised)",
                 Format = Format.Audiobook,
                 FinishedAt = new DateOnly(2024, 3, 3),
                 Rating = 5,
@@ -179,7 +178,7 @@ public class ReadLogServiceTests
             Assert.Equal(Format.Audiobook, entry.Format);
             Assert.Equal(new DateOnly(2024, 3, 3), entry.FinishedAt);
             Assert.Equal(5, entry.Rating);
-            Assert.Equal("Dune (revised)", entry.Book.Title);
+            Assert.Equal("Dune", entry.Book.Title); // title is not editable via the entry
         }
     }
 
@@ -200,7 +199,6 @@ public class ReadLogServiceTests
         {
             await Service(db).UpdateReadEntryAsync(userId, entryId, new UpdateReadEntryRequest
             {
-                Title = "Dune",
                 Format = Format.Book,
                 FinishedAt = new DateOnly(2024, 1, 1),
                 Rating = null,
@@ -233,7 +231,6 @@ public class ReadLogServiceTests
         {
             updated = await Service(db).UpdateReadEntryAsync(stranger, entryId, new UpdateReadEntryRequest
             {
-                Title = "Hijacked",
                 Format = Format.Ebook,
                 FinishedAt = new DateOnly(2024, 9, 9),
                 Rating = 0,
