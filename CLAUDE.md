@@ -24,9 +24,9 @@ behaviour is faithfully reproduced; the *implementation* is .NET-native.
 
 ## Standing rules for agents
 
-- **Do NOT deploy, and do NOT merge to `master`, without the owner's explicit
-  go-ahead.** (The port is already merged with permission; deployment is the one
-  remaining, still-unauthorized task — see *Status*.)
+- **Do NOT merge to `master` or trigger a deploy without the owner's explicit
+  go-ahead.** (The port is merged and the initial deploy was authorized and is **live** —
+  see *Status*; further deploys are gated by the `production` GitHub Environment.)
 - Work in **PR-sized chunks**, open a PR per chunk, **review your own work
   critically and fix every finding** before considering it done. Branches are
   named `feat/prN-<topic>`; `develop` is the integration branch and currently
@@ -40,8 +40,9 @@ behaviour is faithfully reproduced; the *implementation* is .NET-native.
 ```bash
 dotnet build                              # restore + build (Release in CI)
 dotnet run --project src/ReadLog.Web      # https://localhost:7232  http://localhost:5239
-dotnet test                               # xUnit; the whole suite (95 tests)
+dotnet test                               # xUnit; the whole suite
 dotnet dev-certs https --trust            # once, so the HTTPS dev URL loads cleanly
+dotnet format --verify-no-changes         # style gate (EnforceCodeStyleInBuild); drop the flag to auto-fix
 
 # EF Core migrations (dotnet ef is pinned in .config/dotnet-tools.json)
 dotnet tool restore
@@ -98,7 +99,9 @@ The *why* behind every one of these is in **[PORTING-NOTES.md](PORTING-NOTES.md)
 ## Invariants — do not break these
 
 Behaviour that is load-bearing and easy to regress. Most are enforced in
-`Services/ReadLogService.cs` and `Data/ApplicationDbContext.cs`.
+`Services/ReadLogService.cs` and `Data/ApplicationDbContext.cs`, and each is pinned by a
+test under `tests/ReadLog.Tests/` (chiefly `Services/ReadLogServiceTests.cs` and
+`Pages/UiPagesTests.cs`) — break one and `dotnet test` shows which.
 
 - **Ownership returns 404, not 403.** Edit/delete combine existence + ownership in
   one query (`Id == id && UserId == userId`); a non-owner gets the same "not found"
@@ -192,7 +195,7 @@ Setup + caveats live in **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
 ## Status / deploy
 
-Port is **feature-complete and merged to `master`** (95 tests, 0 warnings, CI green),
+Port is **feature-complete and merged to `master`** (full xUnit suite green, 0 warnings),
 and **deployed live** (with the owner's go-ahead) to **Azure App Service F1 Linux**:
 **<https://readlog-a2feef.azurewebsites.net/>**. It runs the container from
 `ghcr.io/mikkonumminen/readlog` (public image), built and shipped by the manual,
