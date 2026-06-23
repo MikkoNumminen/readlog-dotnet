@@ -203,6 +203,9 @@ publish/
 # in these scripts will be unencrypted
 PublishScripts/
 
+# Local scratch dir — screenshots, notes, anything not meant for the repo
+.local/
+
 # NuGet Packages
 *.nupkg
 # NuGet Symbol Packages

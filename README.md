@@ -129,8 +129,13 @@ ReadLog.sln
 Directory.Build.props        # solution-wide build settings (nullable, langversion, analysis)
 global.json                  # pinned .NET SDK
 Dockerfile / .dockerignore   # container build (aspnet:8.0 runtime, non-root)
-docs/SOURCE-MAP.md           # behavioural map of the original Next.js app
+CLAUDE.md                    # orientation, rules, invariants — for agents and humans
 PORTING-NOTES.md             # every significant .NET decision, with rationale
+docs/SOURCE-MAP.md           # behavioural map of the original Next.js app
+docs/DEPLOY.md               # deployment runbook (Azure bootstrap, OIDC, free-tier caveats)
+SECURITY.md                  # security posture + invariants
+docs/THREAT-MODEL.md         # threat model
+docs/audits/                 # dated audit reports
 src/ReadLog.Web/             # the ASP.NET Core Razor Pages application
   Models/  Data/  Dtos/  Options/  Validation/  Auth/  Services/  Pages/
 tests/ReadLog.Tests/         # xUnit tests (unit + integration)
@@ -139,8 +144,11 @@ tests/ReadLog.Tests/         # xUnit tests (unit + integration)
 
 ## Status
 
-The port is feature-complete: every feature of the original ReadLog is implemented,
-the app builds and runs (`dotnet run`), EF Core migrations apply from a clean database,
-the Dockerfile is in place, and the test suite is green. It was built in reviewed,
-PR-sized chunks (scaffold → data layer → integrations → auth → CRUD → UI →
-Docker/deploy); see the merged pull requests for the history.
+The port is feature-complete and **deployed**: every feature of the original ReadLog
+is implemented, the app builds and runs (`dotnet run`), EF Core migrations apply from a
+clean database, the test suite is green, and the container runs **live — and free** on
+Azure App Service (F1 Linux) at <https://readlog-a2feef.azurewebsites.net/>, shipped by
+the manual, reviewer-gated GitHub Actions [`deploy.yml`](.github/workflows/deploy.yml)
+pipeline. Local email/password and "Sign in with Google" both work in production. It was
+built in reviewed, PR-sized chunks (scaffold → data layer → integrations → auth → CRUD →
+UI → Docker → deploy); see the merged pull requests for the history.
