@@ -490,3 +490,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# drift-sync voice-profile cache (machine state, not a deliverable)
+docs/audits/*-scratch.md
