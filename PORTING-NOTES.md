@@ -555,5 +555,5 @@ Every chunk has landed: scaffold → data layer → integrations → auth → CR
 Docker/deploy. The result is an idiomatic ASP.NET Core application — DI throughout,
 async I/O, EF Core migrations, DTOs + DataAnnotations, `IOptions`, `ILogger`,
 nullable-as-error — that reproduces every ReadLog feature without transliterating the
-TypeScript. The full test suite is **95 tests** (the "86 total" above was the running
-count at the end of PR6; PR7 brought it to 95).
+TypeScript. The full xUnit suite is green (run `dotnet test` for the current count; the
+"86 total" noted above was the running count at the end of PR6, which PR7 then grew).

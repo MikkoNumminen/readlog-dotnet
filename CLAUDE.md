@@ -42,7 +42,7 @@ dotnet build                              # restore + build (Release in CI)
 dotnet run --project src/ReadLog.Web      # https://localhost:7232  http://localhost:5239
 dotnet test                               # xUnit; the whole suite
 dotnet dev-certs https --trust            # once, so the HTTPS dev URL loads cleanly
-dotnet format --verify-no-changes         # style gate (EnforceCodeStyleInBuild); drop the flag to auto-fix
+dotnet format --verify-no-changes         # local format check (.editorconfig); complements build-time EnforceCodeStyleInBuild; drop the flag to auto-fix
 
 # EF Core migrations (dotnet ef is pinned in .config/dotnet-tools.json)
 dotnet tool restore
