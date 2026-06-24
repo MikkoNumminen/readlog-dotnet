@@ -113,6 +113,8 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
 // Book-search integrations: typed HttpClients + the search/details services.
 builder.Services.Configure<GoogleBooksOptions>(
     builder.Configuration.GetSection(GoogleBooksOptions.SectionName));
+builder.Services.Configure<HardcoverOptions>(
+    builder.Configuration.GetSection(HardcoverOptions.SectionName));
 builder.Services.AddMemoryCache();
 
 builder.Services.AddHttpClient<IOpenLibraryClient, OpenLibraryClient>(client =>
@@ -125,6 +127,11 @@ builder.Services.AddHttpClient<IOpenLibraryClient, OpenLibraryClient>(client =>
 builder.Services.AddHttpClient<IGoogleBooksClient, GoogleBooksClient>(client =>
 {
     client.BaseAddress = new Uri("https://www.googleapis.com/books/v1/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient<IHardcoverClient, HardcoverClient>(client =>
+{
+    client.BaseAddress = new Uri("https://api.hardcover.app/");
     client.Timeout = TimeSpan.FromSeconds(10);
 });
 

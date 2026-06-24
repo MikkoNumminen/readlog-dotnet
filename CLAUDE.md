@@ -133,9 +133,10 @@ test under `tests/ReadLog.Tests/` (chiefly `Services/ReadLogServiceTests.cs` and
 - **Book-details cache:** 30-day TTL keyed by a `(title, author)` tuple; **only
   non-null results are cached** (so a transient miss is retried, not cached as "none").
 - **Provider-failure asymmetry (preserved):** `OpenLibraryClient` *throws* on a
-  non-OK response, `GoogleBooksClient` returns `[]`. `BookSearchService` degrades
-  each to `[]` independently (the `Promise.allSettled` equivalent) and concatenates
-  **Open Library first**, so it wins de-dup ties.
+  non-OK response; `GoogleBooksClient` and `HardcoverClient` return `[]`.
+  `BookSearchService` degrades each to `[]` independently (the `Promise.allSettled`
+  equivalent) and concatenates **Open Library first** (Hardcover last), so Open Library
+  wins de-dup ties. Hardcover is skipped entirely when its API token is absent.
 - **`CreatedAt` is stamped in code**, not by the DB — `SaveChanges`/`SaveChangesAsync`
   override stamps `ICreatedAt.CreatedAt = DateTime.UtcNow` on insert.
 
@@ -178,10 +179,12 @@ committed.
 | Setting | Purpose |
 | --- | --- |
 | `ConnectionStrings:Default` | SQLite (`Data Source=readlog.db` locally) |
-| `GoogleBooks:ApiKey` | enables Google Books (absent ⇒ Open Library only) |
+| `GoogleBooks:ApiKey` | enables Google Books search/details (absent ⇒ skipped) |
+| `Hardcover:ApiToken` | enables the Hardcover search provider (absent ⇒ skipped) |
 | `Authentication:Google:ClientId` / `ClientSecret` | enables the Google login button |
 
-In dev: `cd src/ReadLog.Web && dotnet user-secrets set "GoogleBooks:ApiKey" "<key>"`.
+In dev: `cd src/ReadLog.Web && dotnet user-secrets set "GoogleBooks:ApiKey" "<key>"`
+(and `"Hardcover:ApiToken" "<token>"` to enable Hardcover).
 
 ## CI
 

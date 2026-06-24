@@ -11,8 +11,9 @@ public class BookSearchServiceTests
         string id, string title, string? author = null, string? cover = null, int? pages = null) =>
         new(id, title, Subtitle: null, author, FirstPublishYear: null, pages, cover);
 
-    private static BookSearchService Build(IOpenLibraryClient openLibrary, IGoogleBooksClient google) =>
-        new(openLibrary, google, NullLogger<BookSearchService>.Instance);
+    private static BookSearchService Build(
+        IOpenLibraryClient openLibrary, IGoogleBooksClient google, IHardcoverClient? hardcover = null) =>
+        new(openLibrary, google, hardcover ?? new StubHardcover([]), NullLogger<BookSearchService>.Instance);
 
     [Fact]
     public async Task SearchAsync_concatenates_results_open_library_first()
@@ -88,6 +89,47 @@ public class BookSearchServiceTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => service.SearchAsync("foundation", cts.Token));
     }
 
+    [Fact]
+    public async Task SearchAsync_appends_hardcover_results_after_open_library_and_google()
+    {
+        var service = Build(
+            new StubOpenLibrary([Result("/works/OL1W", "Dune")]),
+            new StubGoogle([Result("google:g1", "Foundation")]),
+            new StubHardcover([Result("hardcover:neuromancer", "Neuromancer")]));
+
+        var results = await service.SearchAsync("sci-fi");
+
+        Assert.Collection(results,
+            r => Assert.Equal("/works/OL1W", r.OpenLibraryId),
+            r => Assert.Equal("google:g1", r.OpenLibraryId),
+            r => Assert.Equal("hardcover:neuromancer", r.OpenLibraryId));
+    }
+
+    [Fact]
+    public async Task SearchAsync_still_returns_other_providers_when_hardcover_throws()
+    {
+        var service = Build(
+            new StubOpenLibrary([Result("/works/OL1W", "Dune")]),
+            new StubGoogle([]),
+            new StubHardcover(new HttpRequestException("Hardcover down")));
+
+        var book = Assert.Single(await service.SearchAsync("dune"));
+        Assert.Equal("/works/OL1W", book.OpenLibraryId);
+    }
+
+    [Fact]
+    public async Task SearchAsync_breaks_ties_against_hardcover_in_favour_of_open_library()
+    {
+        // Equal scores (both have a cover) — first seen (Open Library) wins; Hardcover is last.
+        var service = Build(
+            new StubOpenLibrary([Result("/works/OL1W", "Dune", cover: "https://ol")]),
+            new StubGoogle([]),
+            new StubHardcover([Result("hardcover:dune", "Dune", cover: "https://hc")]));
+
+        var book = Assert.Single(await service.SearchAsync("dune"));
+        Assert.Equal("/works/OL1W", book.OpenLibraryId);
+    }
+
     private sealed class StubOpenLibrary : IOpenLibraryClient
     {
         private readonly IReadOnlyList<BookSearchResult>? _result;
@@ -117,5 +159,19 @@ public class BookSearchServiceTests
 
         public Task<BookDetails?> GetDetailsAsync(string title, string? author, CancellationToken cancellationToken = default) =>
             Task.FromResult<BookDetails?>(null);
+    }
+
+    private sealed class StubHardcover : IHardcoverClient
+    {
+        private readonly IReadOnlyList<BookSearchResult>? _result;
+        private readonly Exception? _exception;
+
+        public StubHardcover(IReadOnlyList<BookSearchResult> result) => _result = result;
+        public StubHardcover(Exception exception) => _exception = exception;
+
+        public Task<IReadOnlyList<BookSearchResult>> SearchAsync(string query, CancellationToken cancellationToken = default) =>
+            _exception is not null
+                ? Task.FromException<IReadOnlyList<BookSearchResult>>(_exception)
+                : Task.FromResult(_result!);
     }
 }

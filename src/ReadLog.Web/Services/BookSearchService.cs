@@ -11,38 +11,42 @@ public interface IBookSearchService
 }
 
 /// <summary>
-/// Fans out to Open Library and Google Books concurrently, tolerates either provider
-/// failing (the original's <c>Promise.allSettled</c>), concatenates the results
-/// (Open Library first) and de-duplicates by normalised title+author, keeping the
-/// richer of any duplicates.
+/// Fans out to Open Library, Google Books and Hardcover concurrently, tolerates any
+/// provider failing (the original's <c>Promise.allSettled</c>), concatenates the results
+/// (Open Library first, Hardcover last) and de-duplicates by normalised title+author,
+/// keeping the richer of any duplicates.
 /// </summary>
 public partial class BookSearchService : IBookSearchService
 {
     private readonly IOpenLibraryClient _openLibrary;
     private readonly IGoogleBooksClient _googleBooks;
+    private readonly IHardcoverClient _hardcover;
     private readonly ILogger<BookSearchService> _logger;
 
     public BookSearchService(
         IOpenLibraryClient openLibrary,
         IGoogleBooksClient googleBooks,
+        IHardcoverClient hardcover,
         ILogger<BookSearchService> logger)
     {
         _openLibrary = openLibrary;
         _googleBooks = googleBooks;
+        _hardcover = hardcover;
         _logger = logger;
     }
 
     public async Task<IReadOnlyList<BookSearchResult>> SearchAsync(
         string query, CancellationToken cancellationToken = default)
     {
-        // Start both providers, then await together — a failure in one must not sink the other.
+        // Start all providers, then await together — a failure in one must not sink the others.
         var openLibraryTask = SearchSafelyAsync("Open Library", () => _openLibrary.SearchAsync(query, cancellationToken), cancellationToken);
         var googleTask = SearchSafelyAsync("Google Books", () => _googleBooks.SearchAsync(query, cancellationToken), cancellationToken);
+        var hardcoverTask = SearchSafelyAsync("Hardcover", () => _hardcover.SearchAsync(query, cancellationToken), cancellationToken);
 
-        var results = await Task.WhenAll(openLibraryTask, googleTask);
+        var results = await Task.WhenAll(openLibraryTask, googleTask, hardcoverTask);
 
-        // Open Library first, then Google Books (matters for the de-dup tie-break).
-        return Deduplicate(results[0].Concat(results[1]));
+        // Order matters for the de-dup tie-break: Open Library, then Google Books, then Hardcover.
+        return Deduplicate(results[0].Concat(results[1]).Concat(results[2]));
     }
 
     private async Task<IReadOnlyList<BookSearchResult>> SearchSafelyAsync(

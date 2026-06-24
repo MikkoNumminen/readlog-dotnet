@@ -66,7 +66,8 @@ in development). Nothing secret is committed.
 | Setting | Purpose |
 | --- | --- |
 | `ConnectionStrings:Default` | SQLite connection string (default `Data Source=readlog.db`) |
-| `GoogleBooks:ApiKey` | enables Google Books search/details (absent ⇒ Open Library only) |
+| `GoogleBooks:ApiKey` | enables Google Books search/details (absent ⇒ skipped) |
+| `Hardcover:ApiToken` | enables the Hardcover search provider (absent ⇒ skipped) |
 | `Authentication:Google:ClientId` / `ClientSecret` | enables the optional "Sign in with Google" button |
 
 In development, put secrets in user-secrets rather than the file:
@@ -74,6 +75,7 @@ In development, put secrets in user-secrets rather than the file:
 ```bash
 cd src/ReadLog.Web
 dotnet user-secrets set "GoogleBooks:ApiKey" "<key>"
+dotnet user-secrets set "Hardcover:ApiToken" "<token>"
 dotnet user-secrets set "Authentication:Google:ClientId" "<id>"
 dotnet user-secrets set "Authentication:Google:ClientSecret" "<secret>"
 ```
@@ -112,7 +114,7 @@ database). Deploy the container, then set:
 | `WEBSITES_PORT` | `8080` |
 | `WEBSITES_ENABLE_APP_SERVICE_STORAGE` | `true` (persist `/home`, where the SQLite file lives) |
 | `ConnectionStrings__Default` | `Data Source=/home/data/readlog.db` (the Dockerfile default) |
-| `GoogleBooks__ApiKey`, `Authentication__Google__*` | as needed |
+| `GoogleBooks__ApiKey`, `Hardcover__ApiToken`, `Authentication__Google__*` | as needed |
 
 Enable **HTTPS Only** on the App Service; the app honours `X-Forwarded-Proto` via
 forwarded-headers middleware so auth cookies and links use the right scheme behind the
