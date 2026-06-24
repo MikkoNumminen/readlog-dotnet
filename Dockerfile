@@ -19,7 +19,8 @@ WORKDIR /app
 
 # The .NET 8 image listens on 8080 by default; keep that explicit.
 EXPOSE 8080
-ENV ASPNETCORE_HTTP_PORTS=8080 \
+ENV ASPNETCORE_ENVIRONMENT=Production \
+    ASPNETCORE_HTTP_PORTS=8080 \
     ConnectionStrings__Default="Data Source=/home/data/readlog.db"
 
 COPY --from=build /app/publish .

@@ -63,7 +63,7 @@ authorization principal for everything at boundary 2.
 | Mass assignment / over-posting | Bind to explicit request DTOs with DataAnnotations, not entities (`Dtos/`) | None expected |
 | Out-of-range / future data | `[Range(0,5)]`, `[NotInFuture]`, page/year ranges, **plus a DB check constraint** on rating (`ApplicationDbContext`) | None expected |
 | SQL injection | EF Core parameterization; `LIKE` search escapes `% _ \` with `ESCAPE '\'` (`ReadLogService.CheckIfReadAsync`) | None expected |
-| Clickjacking / UI redress | No sensitive one-click GET action; every mutation requires an antiforgery POST | No `X-Frame-Options` / CSP `frame-ancestors` set yet — **demo** |
+| Clickjacking / UI redress | No sensitive one-click GET action; every mutation requires an antiforgery POST; **`X-Frame-Options: DENY` + CSP `frame-ancestors 'none'`** set (Program.cs response-headers middleware) | None expected |
 
 ### R — Repudiation
 | Vector | Mitigation (where) | Residual |
@@ -116,5 +116,7 @@ If this graduated from demo to production, do these (and update SECURITY.md):
 - [ ] Add per-endpoint rate limiting (ASP.NET Core rate limiter) on auth + search.
 - [ ] Move to a server RDBMS (Postgres/SQL Server) and `IDistributedCache`/`HybridCache`
       if scaling beyond one instance (the EF data layer is provider-swappable).
-- [ ] Add a Content-Security-Policy and the standard security headers.
+- [x] Add a Content-Security-Policy and the standard security headers. *(Done — CSP with
+      strict `script-src 'self'`, plus X-Content-Type-Options, Referrer-Policy, X-Frame-Options;
+      Program.cs response-headers middleware.)*
 - [ ] Add audit logging for security-relevant mutations if accountability is needed.
