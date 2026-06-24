@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
@@ -39,6 +40,19 @@ var sqliteConnectionString = new SqliteConnectionStringBuilder(connectionString)
 }.ToString();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(sqliteConnectionString));
+
+// Persist Data Protection keys next to the SQLite DB (the persistent /home share on App
+// Service). Without this they default to ephemeral container storage and regenerate on
+// every cold start — silently signing everyone out and breaking in-flight OAuth
+// correlation. SetApplicationName pins the key ring so it survives restarts/redeploys.
+var dataProtectionKeysDir = Path.Combine(
+    Path.GetDirectoryName(Path.GetFullPath(
+        new SqliteConnectionStringBuilder(connectionString).DataSource)) ?? ".",
+    "keys");
+Directory.CreateDirectory(dataProtectionKeysDir);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysDir))
+    .SetApplicationName("ReadLog");
 
 // Authentication: ASP.NET Core Identity (local accounts) over the EF Core stores,
 // plus an optional Google external login that registers only when configured.
