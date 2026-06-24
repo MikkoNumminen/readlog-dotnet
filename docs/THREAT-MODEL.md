@@ -27,7 +27,7 @@ the **mitigation as actually implemented** (with the file that owns it), and the
    user input crosses here: forms, query strings, the `ReturnUrl`, the Google
    description that is later rendered.
 2. **App → SQLite** (in-process file). EF Core is the only writer.
-3. **App → external APIs** (Open Library, Google Books) over outbound HTTPS to fixed
+3. **App → external APIs** (Open Library, Google Books, Hardcover) over outbound HTTPS to fixed
    base addresses. Responses (titles, authors, cover URLs, HTML descriptions) are
    **untrusted input** that re-enters the app.
 4. **App → Identity provider** (Google OAuth), only when configured.

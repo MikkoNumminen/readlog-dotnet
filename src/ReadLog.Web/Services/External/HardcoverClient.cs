@@ -21,8 +21,9 @@ public interface IHardcoverClient
 /// Typed <see cref="HttpClient"/> for Hardcover's GraphQL API. Requires an API token
 /// (account → Hardcover API); when it's missing (or the query is empty) the call is
 /// skipped and an empty result returned. Like Google Books — and unlike Open Library —
-/// a non-success response degrades to an empty list rather than throwing, so a Hardcover
-/// failure never sinks the other providers in <see cref="BookSearchService"/>.
+/// a non-success response (or a non-JSON body) degrades to an empty list rather than
+/// throwing, so a Hardcover failure never sinks the other providers in
+/// <see cref="BookSearchService"/>.
 /// </summary>
 public class HardcoverClient : IHardcoverClient
 {
@@ -76,13 +77,24 @@ public class HardcoverClient : IHardcoverClient
             return [];
         }
 
-        var payload = await response.Content
-            .ReadFromJsonAsync<HardcoverResponse>(JsonOptions, cancellationToken);
+        HardcoverResponse? payload;
+        try
+        {
+            payload = await response.Content
+                .ReadFromJsonAsync<HardcoverResponse>(JsonOptions, cancellationToken);
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            // A 200 with a non-JSON body (a CDN/HTML interstitial, or `results` returned as a
+            // JSON-encoded string instead of an object) — degrade to empty rather than throwing.
+            return [];
+        }
 
         var hits = payload?.Data?.Search?.Results?.Hits ?? [];
         return hits
             .Select(h => h.Document)
-            .Where(d => d is not null && !string.IsNullOrWhiteSpace(d.Title))
+            .Where(d => d is not null && !string.IsNullOrWhiteSpace(d.Title)
+                        && (d.Slug is not null || d.Id is not null))
             .Select(d => MapSearchResult(d!))
             .ToList();
     }
@@ -91,9 +103,8 @@ public class HardcoverClient : IHardcoverClient
     {
         // Typesense search docs expose a flat author_names[]; fall back to the relational
         // contributions[].author.name shape if that's what comes back.
-        var author = doc.AuthorNames is [var first, ..] && !string.IsNullOrWhiteSpace(first)
-            ? first
-            : doc.Contributions?
+        var author = doc.AuthorNames?.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+            ?? doc.Contributions?
                 .Select(c => c.Author?.Name)
                 .FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
 

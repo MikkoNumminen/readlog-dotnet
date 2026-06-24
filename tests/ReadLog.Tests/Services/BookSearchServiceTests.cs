@@ -117,6 +117,19 @@ public class BookSearchServiceTests
         Assert.Equal("/works/OL1W", book.OpenLibraryId);
     }
 
+    [Fact]
+    public async Task SearchAsync_breaks_ties_against_hardcover_in_favour_of_open_library()
+    {
+        // Equal scores (both have a cover) — first seen (Open Library) wins; Hardcover is last.
+        var service = Build(
+            new StubOpenLibrary([Result("/works/OL1W", "Dune", cover: "https://ol")]),
+            new StubGoogle([]),
+            new StubHardcover([Result("hardcover:dune", "Dune", cover: "https://hc")]));
+
+        var book = Assert.Single(await service.SearchAsync("dune"));
+        Assert.Equal("/works/OL1W", book.OpenLibraryId);
+    }
+
     private sealed class StubOpenLibrary : IOpenLibraryClient
     {
         private readonly IReadOnlyList<BookSearchResult>? _result;

@@ -143,4 +143,68 @@ public class HardcoverClientTests
 
         Assert.Equal("Bearer abc", auth);
     }
+
+    [Fact]
+    public async Task SearchAsync_prefers_author_names_over_contributions()
+    {
+        const string json = """
+        { "data": { "search": { "results": { "hits": [
+          { "document": { "title": "T", "slug": "t",
+              "author_names": ["Primary"],
+              "contributions": [ { "author": { "name": "Secondary" } } ] } }
+        ] } } } }
+        """;
+        var handler = StubHttpMessageHandler.Json(json);
+        var client = new HardcoverClient(handler.CreateClient(BaseAddress), WithToken("t"));
+
+        var book = Assert.Single(await client.SearchAsync("t"));
+        Assert.Equal("Primary", book.Author);
+    }
+
+    [Fact]
+    public async Task SearchAsync_falls_back_to_contributions_when_author_names_is_blank()
+    {
+        const string json = """
+        { "data": { "search": { "results": { "hits": [
+          { "document": { "title": "T", "slug": "t",
+              "author_names": ["   "],
+              "contributions": [ { "author": { "name": "Real Author" } } ] } }
+        ] } } } }
+        """;
+        var handler = StubHttpMessageHandler.Json(json);
+        var client = new HardcoverClient(handler.CreateClient(BaseAddress), WithToken("t"));
+
+        var book = Assert.Single(await client.SearchAsync("t"));
+        Assert.Equal("Real Author", book.Author);
+    }
+
+    [Fact]
+    public async Task SearchAsync_skips_a_hit_with_no_slug_or_id()
+    {
+        const string json = """
+        { "data": { "search": { "results": { "hits": [
+          { "document": { "title": "No Key" } },
+          { "document": { "title": "Has Key", "slug": "has-key" } }
+        ] } } } }
+        """;
+        var handler = StubHttpMessageHandler.Json(json);
+        var client = new HardcoverClient(handler.CreateClient(BaseAddress), WithToken("t"));
+
+        var book = Assert.Single(await client.SearchAsync("t"));
+        Assert.Equal("hardcover:has-key", book.OpenLibraryId);
+    }
+
+    [Fact]
+    public async Task SearchAsync_returns_empty_on_a_non_json_200_body()
+    {
+        // api.hardcover.app is behind Cloudflare; an HTML interstitial with status 200
+        // must degrade to empty, not throw.
+        var handler = new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>Just a moment...</html>", Encoding.UTF8, "text/html"),
+        });
+        var client = new HardcoverClient(handler.CreateClient(BaseAddress), WithToken("t"));
+
+        Assert.Empty(await client.SearchAsync("anything"));
+    }
 }

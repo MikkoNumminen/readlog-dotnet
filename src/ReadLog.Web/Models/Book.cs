@@ -16,8 +16,9 @@ public class Book : ICreatedAt
 
     /// <summary>
     /// Provider id used as the natural key for find-or-create. Holds an Open Library
-    /// work key (e.g. <c>/works/OL1W</c>), a <c>google:&lt;id&gt;</c>, or a
-    /// <c>manual:&lt;timestamp&gt;</c> for hand-entered books. Unique, nullable.
+    /// work key (e.g. <c>/works/OL1W</c>), a <c>google:&lt;id&gt;</c>, a
+    /// <c>hardcover:&lt;slug&gt;</c>, or a <c>manual:&lt;timestamp&gt;</c> for hand-entered
+    /// books. Unique, nullable.
     /// </summary>
     public string? OpenLibraryId { get; set; }
 
