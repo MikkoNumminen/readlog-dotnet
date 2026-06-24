@@ -143,6 +143,10 @@ using (var scope = app.Services.CreateScope())
     app.Logger.LogInformation("Applying EF Core migrations to SQLite database at {DatabasePath}",
         Path.GetFullPath(dbDataSource));
 
+    // Cap the migration command timeout below the 30s connection default so a wedged share
+    // surfaces a crash promptly (≈3×10s) instead of after 3×30s.
+    db.Database.SetCommandTimeout(10);
+
     // First-boot on the SMB share can hit a transient lock/permission hiccup; retry a few
     // times, logging each failure, then rethrow on the last attempt (never swallow).
     const int maxMigrationAttempts = 3;
