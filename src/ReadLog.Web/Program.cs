@@ -183,7 +183,10 @@ app.Use(async (context, next) =>
     headers["Content-Security-Policy"] =
         "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
         "img-src 'self' https: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-        "form-action 'self'";
+        // form-action is enforced on the redirect target too: the "Sign in with Google" form
+        // POSTs to /signin (self), which 302-redirects to accounts.google.com — so that host
+        // must be allowed or the browser blocks the OAuth handoff.
+        "form-action 'self' https://accounts.google.com";
     await next();
 });
 
