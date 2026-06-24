@@ -95,7 +95,7 @@ az webapp update -g "$RG" -n "$APP" --https-only true
 | Setting | Why |
 | --- | --- |
 | `WEBSITES_PORT=8080` | Custom containers need this so App Service forwards HTTP to the right port (the image `EXPOSE`s 8080). |
-| `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true` | **Required.** For custom containers, persistent `/home` is **off by default** — without it the SQLite file is wiped on every restart. This mounts the platform `/home` share. |
+| `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true` | **Required.** For custom containers, persistent `/home` is **off by default** — without it the SQLite file **and the Data Protection key ring** (persisted under `/home/data/keys`) are wiped on every restart, which also logs every user out. This mounts the platform `/home` share. |
 | `ConnectionStrings__Default` | Points EF Core at the SQLite file on the persistent share. Matches the Dockerfile default; set explicitly so it's visible/overridable. |
 | `WEBSITES_CONTAINER_START_TIME_LIMIT=600` | Default container-start timeout is 230 s. On F1's shared CPU a cold start that also runs `Database.Migrate()` can exceed it and get killed mid-migration. 600 s gives it room. |
 | HTTPS Only | App Service terminates TLS at the edge (free `*.azurewebsites.net` cert); the container stays HTTP on 8080. `UseForwardedHeaders` (first in the pipeline) makes the app see the original `https` scheme. |
